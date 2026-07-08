@@ -387,6 +387,51 @@ function specialForDepth(depth) {
   return options[0] || null;
 }
 
+function randomizedMult(baseMult) {
+  const variance = 0.85 + Math.random() * 0.3;
+  return Math.max(1, Math.round(baseMult * variance));
+}
+
+function finalPrizeForDepth() {
+  if (Math.random() < 0.8) {
+    const options = [
+      { ...specialCatalog[2], weight: 20 },
+      { ...specialCatalog[3], weight: 34 },
+      { ...specialCatalog[4], weight: 46 },
+    ];
+    const totalWeight = options.reduce((total, item) => total + item.weight, 0);
+    let roll = Math.random() * totalWeight;
+
+    for (const item of options) {
+      roll -= item.weight;
+      if (roll <= 0) return item;
+    }
+    return options[0];
+  }
+
+  const options = fishCatalog.filter((fish) => fish.zone === 3 && fish.mult >= 40);
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+function makeFishInstance(item, index, depth, overrides = {}) {
+  const lanes = [125, 245, 365, 485, 595];
+  return {
+    ...item,
+    ...overrides,
+    mult: randomizedMult(item.mult),
+    isSpecial: Boolean(item.shape),
+    x: overrides.x ?? lanes[index % lanes.length] + Math.random() * 54 - 27,
+    depth: overrides.depth ?? Math.min(maxDepth - 0.2, depth + Math.random() * 0.9),
+    dir: overrides.dir ?? (index % 2 === 0 ? 1 : -1),
+    speed: 0.25 + Math.random() * 0.55,
+    phase: Math.random() * Math.PI * 2,
+    valueMultiplier: 1,
+    attempted: false,
+    hooked: false,
+    escaped: false,
+  };
+}
+
 function resetRound() {
   state.depth = 0;
   state.spent = 0;
@@ -411,26 +456,20 @@ function resetRound() {
 }
 
 function makeFish() {
-  const lanes = [125, 245, 365, 485, 595];
   const fish = [];
 
   for (let depth = 1.2; depth < maxDepth; depth += 3.8 + Math.random() * 3.2) {
     const item = specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
-    fish.push({
-      ...item,
-      isSpecial: Boolean(item.shape),
-      x: lanes[index % lanes.length] + Math.random() * 54 - 27,
-      depth: Math.min(maxDepth - 0.2, depth + Math.random() * 0.9),
-      dir: index % 2 === 0 ? 1 : -1,
-      speed: 0.25 + Math.random() * 0.55,
-      phase: Math.random() * Math.PI * 2,
-      valueMultiplier: 1,
-      attempted: false,
-      hooked: false,
-      escaped: false,
-    });
+    fish.push(makeFishInstance(item, index, depth));
   }
+
+  fish.push(makeFishInstance(finalPrizeForDepth(), fish.length, maxDepth, {
+    x: W / 2 + Math.random() * 58 - 29,
+    depth: maxDepth - 0.15,
+    dir: Math.random() < 0.5 ? 1 : -1,
+    catchRate: 0.34,
+  }));
 
   return fish;
 }
@@ -566,13 +605,13 @@ function updatePull(dt) {
 }
 
 function struggleProfile(fish) {
-  if (fish.mult <= 4) return { count: 1, escapeChance: 0.1, progress: [0.6] };
-  if (fish.mult <= 6) return { count: 1, escapeChance: 0.13, progress: [0.6] };
-  if (fish.mult <= 12) return { count: 2, escapeChance: 0.16, progress: [0.45, 0.75] };
-  if (fish.mult <= 19) return { count: 2, escapeChance: 0.2, progress: [0.45, 0.75] };
-  if (fish.mult <= 40) return { count: 3, escapeChance: 0.24, progress: [0.3, 0.6, 0.85] };
-  if (fish.mult <= 75) return { count: 3, escapeChance: 0.3, progress: [0.3, 0.6, 0.85] };
-  return { count: 3, escapeChance: 0.35, progress: [0.3, 0.6, 0.85] };
+  if (fish.mult <= 4) return { count: 1, escapeChance: 0.06, progress: [0.6] };
+  if (fish.mult <= 6) return { count: 1, escapeChance: 0.08, progress: [0.6] };
+  if (fish.mult <= 12) return { count: 2, escapeChance: 0.1, progress: [0.45, 0.75] };
+  if (fish.mult <= 19) return { count: 2, escapeChance: 0.13, progress: [0.45, 0.75] };
+  if (fish.mult <= 40) return { count: 3, escapeChance: 0.16, progress: [0.3, 0.6, 0.85] };
+  if (fish.mult <= 75) return { count: 3, escapeChance: 0.2, progress: [0.3, 0.6, 0.85] };
+  return { count: 3, escapeChance: 0.24, progress: [0.3, 0.6, 0.85] };
 }
 
 function setupStruggleChecks(fish) {
