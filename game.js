@@ -107,13 +107,13 @@ function ensureMusic() {
   const tensionOsc = audioCtx.createOscillator();
 
   master.gain.value = 0.0001;
-  pad.gain.value = 0.07;
+  pad.gain.value = 0.052;
   pulse.gain.value = 0.0001;
   tension.gain.value = 0.0001;
 
   filter.type = "lowpass";
-  filter.frequency.value = 420;
-  filter.Q.value = 0.8;
+  filter.frequency.value = 760;
+  filter.Q.value = 0.55;
   bassFilter.type = "lowpass";
   bassFilter.frequency.value = 180;
   bassFilter.Q.value = 5;
@@ -122,13 +122,13 @@ function ensureMusic() {
   oscA.frequency.value = 48;
   oscB.type = "triangle";
   oscB.frequency.value = 72;
-  pulseOsc.type = "sawtooth";
-  pulseOsc.frequency.value = 42;
+  pulseOsc.type = "triangle";
+  pulseOsc.frequency.value = 58;
   lfo.type = "sine";
   lfo.frequency.value = 0.08;
   lfoGain.gain.value = 0.02;
-  tensionOsc.type = "sawtooth";
-  tensionOsc.frequency.value = 118;
+  tensionOsc.type = "triangle";
+  tensionOsc.frequency.value = 330;
 
   oscA.connect(pad);
   oscB.connect(pad);
@@ -169,17 +169,21 @@ function ensureMusic() {
 }
 
 function playMusicBeat(depthRatio) {
-  const bassGain = 0.12 + depthRatio * 0.08;
-  const bassStart = 92 + depthRatio * 20;
-  playTone(bassStart, 0.12, "sawtooth", bassGain, 42 + depthRatio * 16);
+  const bassGain = 0.08 + depthRatio * 0.04;
+  const bassStart = 76 + depthRatio * 18;
+  playTone(bassStart, 0.09, "triangle", bassGain, 46 + depthRatio * 12);
 
   if (music.beatStep % 2 === 1) {
-    playTone(240 + depthRatio * 180, 0.055, "square", 0.045 + depthRatio * 0.025, 520 + depthRatio * 240);
+    playTone(740 + depthRatio * 260, 0.045, "square", 0.035 + depthRatio * 0.018, 1180 + depthRatio * 420);
   }
 
-  if (depthRatio > 0.45 && music.beatStep % 4 === 3) {
-    playNoise(0.08, 0.035 + depthRatio * 0.035);
-    playTone(880 + depthRatio * 380, 0.045, "triangle", 0.035 + depthRatio * 0.02);
+  if (music.beatStep % 4 === 3) {
+    playTone(1320 + depthRatio * 420, 0.035, "triangle", 0.026 + depthRatio * 0.015, 1880 + depthRatio * 520);
+    setTimeout(() => playTone(1660 + depthRatio * 520, 0.03, "sine", 0.02 + depthRatio * 0.012), 55);
+  }
+
+  if (depthRatio > 0.55 && music.beatStep % 8 === 7) {
+    playNoise(0.045, 0.018 + depthRatio * 0.018);
   }
 
   music.beatStep += 1;
@@ -191,23 +195,23 @@ function updateMusic() {
   const now = audioCtx.currentTime;
   const depthRatio = Math.min(1, state.depth / maxDepth);
   const active = state.status === "diving" || state.status === "pulling" || state.status === "cut";
-  const masterTarget = active ? 0.28 + depthRatio * 0.16 : 0.12;
-  const pulseTarget = active ? 0.035 + depthRatio * 0.07 : 0.006;
-  const tensionTarget = depthRatio > 0.35 ? (depthRatio - 0.35) * 0.085 : 0.0001;
+  const masterTarget = active ? 0.24 + depthRatio * 0.1 : 0.105;
+  const pulseTarget = active ? 0.022 + depthRatio * 0.045 : 0.004;
+  const tensionTarget = depthRatio > 0.45 ? (depthRatio - 0.45) * 0.045 : 0.0001;
 
   music.master.gain.setTargetAtTime(masterTarget, now, 0.35);
   music.pulse.gain.setTargetAtTime(pulseTarget, now, 0.25);
   music.tension.gain.setTargetAtTime(tensionTarget, now, 0.35);
-  music.filter.frequency.setTargetAtTime(520 + depthRatio * 1300, now, 0.5);
-  music.bassFilter.frequency.setTargetAtTime(110 + depthRatio * 180, now, 0.35);
-  music.oscA.frequency.setTargetAtTime(44 + depthRatio * 22, now, 0.6);
-  music.oscB.frequency.setTargetAtTime(66 + depthRatio * 44, now, 0.6);
-  music.pulseOsc.frequency.setTargetAtTime(36 + depthRatio * 42, now, 0.35);
-  music.tensionOsc.frequency.setTargetAtTime(120 + depthRatio * 180, now, 0.4);
+  music.filter.frequency.setTargetAtTime(680 + depthRatio * 980, now, 0.5);
+  music.bassFilter.frequency.setTargetAtTime(90 + depthRatio * 130, now, 0.35);
+  music.oscA.frequency.setTargetAtTime(42 + depthRatio * 12, now, 0.6);
+  music.oscB.frequency.setTargetAtTime(63 + depthRatio * 28, now, 0.6);
+  music.pulseOsc.frequency.setTargetAtTime(52 + depthRatio * 30, now, 0.35);
+  music.tensionOsc.frequency.setTargetAtTime(260 + depthRatio * 230, now, 0.4);
 
   if (active && now >= music.nextBeat) {
     playMusicBeat(depthRatio);
-    music.nextBeat = now + Math.max(0.24, 0.68 - depthRatio * 0.34);
+    music.nextBeat = now + Math.max(0.28, 0.74 - depthRatio * 0.3);
   }
 }
 
