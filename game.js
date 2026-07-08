@@ -40,6 +40,7 @@ const state = {
   hookY: hookDiveY,
   messageTimer: 0,
   bubbles: [],
+  effects: [],
   fish: [],
   shark: null,
   caughtFish: null,
@@ -391,6 +392,7 @@ function resetRound() {
   state.hookY = hookDiveY;
   state.messageTimer = 0;
   state.shark = null;
+  state.effects = [];
   state.caughtFish = null;
   state.bestCandidate = null;
   state.pullProgress = 0;
@@ -670,7 +672,9 @@ function updateRoulette(dt) {
 
   if (visibleOutcome === "DOUBLE" && state.caughtFish) {
     state.caughtFish.valueMultiplier = (state.caughtFish.valueMultiplier || 1) * 2;
+    state.caughtFish.doubleFlash = 1.2;
     state.bestCandidate = state.caughtFish;
+    addDoubleEffect(state.caughtFish);
   }
 
   state.roulette = null;
@@ -720,6 +724,7 @@ function updateShark(dt) {
 
 function updateFish(dt) {
   for (const fish of state.fish) {
+    if (fish.doubleFlash) fish.doubleFlash = Math.max(0, fish.doubleFlash - dt);
     if (fish.hooked) continue;
     fish.phase += dt * 2.4;
     fish.x += fish.speed * fish.dir * dt * 34;
@@ -727,6 +732,24 @@ function updateFish(dt) {
     if (fish.x < 68) fish.dir = 1;
     if (fish.x > W - 68) fish.dir = -1;
   }
+}
+
+function addDoubleEffect(fish) {
+  state.effects.push({
+    type: "double",
+    x: W / 2,
+    y: hookDiveY + 62,
+    timer: 0,
+    duration: 1.1,
+    multiplier: fish.valueMultiplier || 2,
+  });
+}
+
+function updateEffects(dt) {
+  for (const effect of state.effects) {
+    effect.timer += dt;
+  }
+  state.effects = state.effects.filter((effect) => effect.timer < effect.duration);
 }
 
 function addBubbles(dt) {
@@ -801,6 +824,44 @@ function drawDepthShade(depthRatio) {
     ctx.fillRect(0, 0, W, H);
   }
   ctx.restore();
+}
+
+function drawEffects() {
+  for (const effect of state.effects) {
+    if (effect.type !== "double") continue;
+    const progress = Math.min(1, effect.timer / effect.duration);
+    const alpha = 1 - progress;
+    const radius = 45 + progress * 190;
+
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.75;
+    ctx.strokeStyle = "#ffd36a";
+    ctx.lineWidth = 8 * (1 - progress) + 2;
+    ctx.beginPath();
+    ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = alpha * 0.28;
+    ctx.fillStyle = "#ffd36a";
+    for (let i = 0; i < 10; i += 1) {
+      const angle = i * (Math.PI * 2 / 10) + progress * 1.4;
+      const distance = 32 + progress * 150;
+      ctx.beginPath();
+      ctx.arc(effect.x + Math.cos(angle) * distance, effect.y + Math.sin(angle) * distance, 8 + progress * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#ffd36a";
+    ctx.strokeStyle = "#4b2a14";
+    ctx.lineWidth = 4;
+    ctx.font = "950 54px Trebuchet MS";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.strokeText(`x${Math.round(effect.multiplier)}`, effect.x, effect.y - 88 - progress * 20);
+    ctx.fillText(`x${Math.round(effect.multiplier)}`, effect.x, effect.y - 88 - progress * 20);
+    ctx.restore();
+  }
 }
 
 function drawBoat() {
@@ -944,6 +1005,7 @@ function drawFish(fish) {
   const roll = fish.hooked ? Math.sin(state.time * 18) * 0.18 : 0;
   const rarity = fish.rarity || 1;
   const glow = rarity >= 3 ? 0.22 + rarity * 0.06 : 0;
+  const isDoubled = (fish.valueMultiplier || 1) > 1;
 
   ctx.save();
   ctx.translate(fish.x + struggle, fishY);
@@ -967,6 +1029,16 @@ function drawFish(fish) {
   ctx.ellipse(0, 0, fish.size, fish.size * 0.55, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+
+  if (isDoubled) {
+    ctx.save();
+    ctx.globalAlpha = 0.56;
+    ctx.fillStyle = "#ffd36a";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, fish.size * 1.04, fish.size * 0.58, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   ctx.fillStyle = rarity >= 4 ? fish.accent : fish.color;
   ctx.beginPath();
@@ -1042,6 +1114,9 @@ function drawFish(fish) {
     ctx.font = `900 ${14 + Math.min(6, rarity * 2)}px Trebuchet MS`;
     ctx.textAlign = "center";
     ctx.fillText(fishValue(fish), 0, -fish.size - 10);
+  } else if (isDoubled) {
+    ctx.scale(fish.dir, 1);
+    drawDoubleBadge(0, -fish.size - 18, fish.valueMultiplier || 2);
   }
   ctx.restore();
 }
@@ -1050,6 +1125,7 @@ function drawSpecialCatch(fish, fishY) {
   const struggle = fish.hooked ? Math.sin(state.time * 24) * 13 : Math.sin(state.time * 2 + fish.phase) * 8;
   const bob = Math.sin(state.time * 3 + fish.phase) * 6;
   const pulse = 1 + Math.sin(state.time * 4 + fish.phase) * 0.05;
+  const isDoubled = (fish.valueMultiplier || 1) > 1;
 
   ctx.save();
   ctx.translate(fish.x + struggle, fishY + bob);
@@ -1063,7 +1139,41 @@ function drawSpecialCatch(fish, fishY) {
   if (fish.shape === "tuna") drawCrownedTuna(fish);
   if (fish.shape === "whale") drawAbyssWhale(fish);
 
+  if (isDoubled) {
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = "#ffd36a";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, fish.size * 1.32, fish.size * 0.82, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   drawSpecialLabel(fish);
+  if (fish.hooked && isDoubled) {
+    ctx.scale(fish.dir, 1);
+    drawDoubleBadge(0, -fish.size - 58, fish.valueMultiplier || 2);
+  }
+  ctx.restore();
+}
+
+function drawDoubleBadge(x, y, multiplier) {
+  ctx.save();
+  ctx.translate(x, y);
+  const scale = 1 + Math.sin(state.time * 12) * 0.08;
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "rgba(255, 211, 106, 0.95)";
+  ctx.strokeStyle = "#5a310e";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(-34, -18, 68, 36, 12);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#3b230a";
+  ctx.font = "950 22px Trebuchet MS";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`x${Math.round(multiplier)}`, 0, 1);
   ctx.restore();
 }
 
@@ -1393,6 +1503,7 @@ function render() {
   for (const fish of state.fish) drawFish(fish);
   drawHook();
   drawShark();
+  drawEffects();
   drawDepthShade(Math.min(1, state.depth / maxDepth));
   drawRoulette();
 
@@ -1418,6 +1529,7 @@ function frame(now) {
   updatePull(dt);
   updateShark(dt);
   updateFish(dt);
+  updateEffects(dt);
   addBubbles(dt);
   updateHud();
   updateMusic();
