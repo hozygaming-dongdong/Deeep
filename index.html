@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Deeeep</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <section class="ocean-stage" aria-label="Deep Hook Crush game">
+        <canvas id="gameCanvas" width="720" height="1280"></canvas>
+
+        <div class="hud hud-top">
+          <div>
+            <span class="label">BALANCE</span>
+            <strong id="balanceText">$10,000</strong>
+          </div>
+          <div>
+            <span class="label">DEPTH</span>
+            <strong id="depthText">0m</strong>
+          </div>
+          <div>
+            <span class="label">RISK</span>
+            <strong id="riskText">LOW</strong>
+          </div>
+        </div>
+
+        <div class="result-panel hidden" id="resultPanel">
+          <p id="resultKicker">READY</p>
+          <h1 id="resultTitle">Deep Hook</h1>
+          <p id="resultBody">Hold GO DEEP to sink. Release or pull up before the shark cuts the line.</p>
+          <button id="newRoundButton" type="button">NEW ROUND</button>
+        </div>
+
+        <div class="controls">
+          <div class="bet-panel">
+            <button id="betDownButton" class="small-button" type="button" aria-label="Decrease bet">‹</button>
+            <div>
+              <span class="label">BET</span>
+              <strong id="betText">100</strong>
+            </div>
+            <button id="betUpButton" class="small-button" type="button" aria-label="Increase bet">›</button>
+          </div>
+
+          <button id="deepButton" class="main-button deep-button" type="button">GO DEEP</button>
+          <button id="pullButton" class="main-button pull-button" type="button">PULL UP</button>
+        </div>
+
+        <div class="hud hud-bottom">
+          <div>
+            <span class="label">TOTAL COST</span>
+            <strong id="costText">$0</strong>
+          </div>
+          <div>
+            <span class="label">BEST FISH</span>
+            <strong id="bestFishText">-</strong>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>
