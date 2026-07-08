@@ -63,11 +63,11 @@ const fishCatalog = [
 ];
 
 const specialCatalog = [
-  { name: "Crystal Jelly", mult: 80, minDepth: 15, weight: 40, shape: "jelly", catchRate: 0.28, holdRate: 0.46, color: "#8ff6ff", accent: "#d9ffff", size: 58, rarity: 4, tag: "RARE" },
-  { name: "Treasure Crab", mult: 120, minDepth: 25, weight: 28, shape: "crab", catchRate: 0.24, holdRate: 0.4, color: "#e66b42", accent: "#ffd36a", size: 60, rarity: 4, tag: "RARE" },
-  { name: "Ghost Ray", mult: 250, minDepth: 40, weight: 18, shape: "ray", catchRate: 0.18, holdRate: 0.34, color: "#9ce7ff", accent: "#ffffff", size: 76, rarity: 5, tag: "EPIC" },
-  { name: "Crowned Tuna", mult: 400, minDepth: 50, weight: 10, shape: "tuna", catchRate: 0.14, holdRate: 0.28, color: "#f6b84e", accent: "#fff06e", size: 78, rarity: 5, tag: "EPIC" },
-  { name: "Abyss Whale", mult: 800, minDepth: 70, weight: 4, shape: "whale", catchRate: 0.08, holdRate: 0.2, color: "#192334", accent: "#6ff8ff", size: 118, rarity: 6, tag: "LEGENDARY" },
+  { name: "Crystal Jelly", mult: 120, minDepth: 15, weight: 40, shape: "jelly", catchRate: 0.28, holdRate: 0.46, color: "#8ff6ff", accent: "#d9ffff", size: 58, rarity: 4, tag: "RARE" },
+  { name: "Treasure Crab", mult: 180, minDepth: 25, weight: 28, shape: "crab", catchRate: 0.24, holdRate: 0.4, color: "#e66b42", accent: "#ffd36a", size: 60, rarity: 4, tag: "RARE" },
+  { name: "Ghost Ray", mult: 375, minDepth: 40, weight: 18, shape: "ray", catchRate: 0.18, holdRate: 0.34, color: "#9ce7ff", accent: "#ffffff", size: 76, rarity: 5, tag: "EPIC" },
+  { name: "Crowned Tuna", mult: 600, minDepth: 50, weight: 10, shape: "tuna", catchRate: 0.14, holdRate: 0.28, color: "#f6b84e", accent: "#fff06e", size: 78, rarity: 5, tag: "EPIC" },
+  { name: "Abyss Whale", mult: 1200, minDepth: 70, weight: 4, shape: "whale", catchRate: 0.08, holdRate: 0.2, color: "#192334", accent: "#6ff8ff", size: 118, rarity: 6, tag: "LEGENDARY" },
 ];
 
 function money(value) {
@@ -366,10 +366,10 @@ function catalogForDepth(depth) {
 
 function specialChanceForDepth(depth) {
   if (depth < 15) return 0;
-  if (depth <= 20) return 0.012;
-  if (depth <= 50) return 0.025;
-  if (depth <= 75) return 0.04;
-  return 0.06;
+  if (depth <= 20) return 0.018;
+  if (depth <= 50) return 0.0375;
+  if (depth <= 75) return 0.06;
+  return 0.09;
 }
 
 function specialForDepth(depth) {
@@ -395,9 +395,9 @@ function randomizedMult(baseMult) {
 function finalPrizeForDepth() {
   if (Math.random() < 0.8) {
     const options = [
-      { ...specialCatalog[2], weight: 20 },
-      { ...specialCatalog[3], weight: 34 },
-      { ...specialCatalog[4], weight: 46 },
+      { ...specialCatalog[2], weight: 16 },
+      { ...specialCatalog[3], weight: 36 },
+      { ...specialCatalog[4], weight: 58 },
     ];
     const totalWeight = options.reduce((total, item) => total + item.weight, 0);
     let roll = Math.random() * totalWeight;
