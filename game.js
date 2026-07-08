@@ -27,6 +27,7 @@ const betSteps = [10, 20, 50, 100, 200, 500, 1000];
 const TAU = Math.PI * 2;
 const doubleChance = 0.12;
 let audioCtx = null;
+let music = null;
 
 const state = {
   balance: 10000,
@@ -85,6 +86,87 @@ function ensureAudio() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) return;
   audioCtx = new AudioContextClass();
+}
+
+function ensureMusic() {
+  ensureAudio();
+  if (!audioCtx || music) return;
+
+  const master = audioCtx.createGain();
+  const pad = audioCtx.createGain();
+  const pulse = audioCtx.createGain();
+  const tension = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+  const oscA = audioCtx.createOscillator();
+  const oscB = audioCtx.createOscillator();
+  const pulseOsc = audioCtx.createOscillator();
+  const lfo = audioCtx.createOscillator();
+  const lfoGain = audioCtx.createGain();
+  const tensionOsc = audioCtx.createOscillator();
+
+  master.gain.value = 0.0001;
+  pad.gain.value = 0.045;
+  pulse.gain.value = 0.0001;
+  tension.gain.value = 0.0001;
+
+  filter.type = "lowpass";
+  filter.frequency.value = 420;
+  filter.Q.value = 0.8;
+
+  oscA.type = "sine";
+  oscA.frequency.value = 54;
+  oscB.type = "triangle";
+  oscB.frequency.value = 81;
+  pulseOsc.type = "square";
+  pulseOsc.frequency.value = 2.2;
+  lfo.type = "sine";
+  lfo.frequency.value = 0.08;
+  lfoGain.gain.value = 0.02;
+  tensionOsc.type = "sawtooth";
+  tensionOsc.frequency.value = 118;
+
+  oscA.connect(pad);
+  oscB.connect(pad);
+  pad.connect(filter);
+  filter.connect(master);
+
+  pulseOsc.connect(pulse);
+  pulse.connect(master);
+
+  tensionOsc.connect(tension);
+  tension.connect(master);
+
+  lfo.connect(lfoGain);
+  lfoGain.connect(master.gain);
+  master.connect(audioCtx.destination);
+
+  oscA.start();
+  oscB.start();
+  pulseOsc.start();
+  lfo.start();
+  tensionOsc.start();
+
+  music = { master, pad, pulse, tension, filter, oscA, oscB, pulseOsc, tensionOsc };
+}
+
+function updateMusic() {
+  if (!audioCtx || !music) return;
+
+  const now = audioCtx.currentTime;
+  const depthRatio = Math.min(1, state.depth / maxDepth);
+  const active = state.status === "diving" || state.status === "pulling" || state.status === "cut";
+  const masterTarget = active ? 0.16 + depthRatio * 0.08 : 0.055;
+  const pulseTarget = active ? 0.008 + depthRatio * 0.04 : 0.0001;
+  const tensionTarget = depthRatio > 0.45 ? (depthRatio - 0.45) * 0.035 : 0.0001;
+
+  music.master.gain.setTargetAtTime(masterTarget, now, 0.35);
+  music.pulse.gain.setTargetAtTime(pulseTarget, now, 0.25);
+  music.tension.gain.setTargetAtTime(tensionTarget, now, 0.35);
+  music.filter.frequency.setTargetAtTime(360 + depthRatio * 820, now, 0.5);
+  music.oscA.frequency.setTargetAtTime(48 + depthRatio * 18, now, 0.6);
+  music.oscB.frequency.setTargetAtTime(72 + depthRatio * 36, now, 0.6);
+  music.pulseOsc.frequency.setTargetAtTime(1.4 + depthRatio * 7.5, now, 0.35);
+  music.tensionOsc.frequency.setTargetAtTime(94 + depthRatio * 120, now, 0.4);
 }
 
 function playTone(freq, duration = 0.08, type = "sine", gain = 0.08, slideTo = null) {
@@ -321,6 +403,7 @@ function updateHud() {
 
 function beginDive() {
   ensureAudio();
+  ensureMusic();
   if (state.status === "ready") {
     if (state.balance < bet()) {
       showResult("NO BALANCE", "Need More Balance", "Lower the bet or start again with enough balance.", true);
@@ -346,6 +429,7 @@ function stopDive() {
 
 function startPull() {
   ensureAudio();
+  ensureMusic();
   state.status = "pulling";
   state.isHolding = false;
   state.pullProgress = 0;
@@ -1295,6 +1379,7 @@ function frame(now) {
   updateFish(dt);
   addBubbles(dt);
   updateHud();
+  updateMusic();
   render();
   requestAnimationFrame(frame);
 }
@@ -1338,6 +1423,10 @@ pullButton.addEventListener("click", startPull);
 betDownButton.addEventListener("click", () => changeBet(-1));
 betUpButton.addEventListener("click", () => changeBet(1));
 newRoundButton.addEventListener("click", resetRound);
+
+document.addEventListener("contextmenu", (event) => event.preventDefault());
+document.addEventListener("selectstart", (event) => event.preventDefault());
+document.addEventListener("gesturestart", (event) => event.preventDefault());
 
 resetRound();
 requestAnimationFrame(frame);
