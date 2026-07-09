@@ -35,6 +35,8 @@ const TAU = Math.PI * 2;
 const doubleChance = 0.12;
 const bossDoubleChance = 0.5;
 const defaultCrimsonChance = 0.1;
+const musicVolumeBoost = 1.8;
+const sfxVolumeBoost = 2.4;
 let audioCtx = null;
 let music = null;
 
@@ -227,7 +229,7 @@ function updateMusic() {
   const now = audioCtx.currentTime;
   const depthRatio = Math.min(1, state.depth / maxDepth);
   const active = state.status === "diving" || state.status === "pulling" || state.status === "cut";
-  const masterTarget = active ? 0.24 + depthRatio * 0.1 : 0.105;
+  const masterTarget = Math.min(0.78, (active ? 0.24 + depthRatio * 0.1 : 0.105) * musicVolumeBoost);
   const pulseTarget = active ? 0.022 + depthRatio * 0.045 : 0.004;
   const tensionTarget = depthRatio > 0.45 ? (depthRatio - 0.45) * 0.045 : 0.0001;
 
@@ -252,11 +254,12 @@ function playTone(freq, duration = 0.08, type = "sine", gain = 0.08, slideTo = n
   const now = audioCtx.currentTime;
   const osc = audioCtx.createOscillator();
   const amp = audioCtx.createGain();
+  const boostedGain = Math.min(0.5, gain * sfxVolumeBoost);
   osc.type = type;
   osc.frequency.setValueAtTime(freq, now);
   if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, now + duration);
   amp.gain.setValueAtTime(0.0001, now);
-  amp.gain.exponentialRampToValueAtTime(gain, now + 0.012);
+  amp.gain.exponentialRampToValueAtTime(boostedGain, now + 0.012);
   amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   osc.connect(amp);
   amp.connect(audioCtx.destination);
@@ -267,6 +270,7 @@ function playTone(freq, duration = 0.08, type = "sine", gain = 0.08, slideTo = n
 function playNoise(duration = 0.18, gain = 0.08) {
   if (!audioCtx) return;
   const now = audioCtx.currentTime;
+  const boostedGain = Math.min(0.45, gain * sfxVolumeBoost);
   const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < data.length; i += 1) {
@@ -274,7 +278,7 @@ function playNoise(duration = 0.18, gain = 0.08) {
   }
   const source = audioCtx.createBufferSource();
   const amp = audioCtx.createGain();
-  amp.gain.setValueAtTime(gain, now);
+  amp.gain.setValueAtTime(boostedGain, now);
   amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   source.buffer = buffer;
   source.connect(amp);
