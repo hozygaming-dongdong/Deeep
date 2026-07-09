@@ -814,8 +814,6 @@ function setupStruggleChecks(fish) {
         total: 1,
         depth: Math.max(0.25, caughtDepth * 0.52),
         escapeChance: 0.3,
-        doubleChance: 0.7,
-        mode: "boss",
         done: false,
       }];
       return;
@@ -847,7 +845,7 @@ function setupStruggleChecks(fish) {
 function maybeStartStruggle() {
   const fish = state.caughtFish;
   if (!fish || state.roulette) return;
-  if (fish.isBoss) return;
+  if (fish.bossType === "crimson") return;
   const check = state.struggleChecks.find((item) => !item.done && state.depth <= item.depth);
   if (!check || state.depth <= 0.2) return;
 
@@ -1071,11 +1069,11 @@ function finishPull() {
 
 function payoutForCatch(fish) {
   if (fish.bossType === "octopus") {
-    return bet() * (fish.mult + (fish.collectorBonusMult || 0));
+    return bet() * (fish.mult + (fish.collectorBonusMult || 0)) * (fish.valueMultiplier || 1);
   }
   if (fish.bossType === "mystery") {
     if (!fish.mysteryMult) fish.mysteryMult = mysteryPrizeMult();
-    return bet() * fish.mysteryMult;
+    return bet() * fish.mysteryMult * (fish.valueMultiplier || 1);
   }
   return bet() * fish.mult * (fish.valueMultiplier || 1);
 }
@@ -1085,10 +1083,12 @@ function resultBodyForCatch(fish, payout) {
     return `Four boss gambles cleared. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
   }
   if (fish.bossType === "octopus") {
-    return `Collector grabbed ${fish.collectorCount || 0} fish. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
+    const doubleText = (fish.valueMultiplier || 1) > 1 ? ` Wheel multiplier x${Math.round(fish.valueMultiplier)}.` : "";
+    return `Collector grabbed ${fish.collectorCount || 0} fish.${doubleText} Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
   }
   if (fish.bossType === "mystery") {
-    return `Mystery prize opened at ${Math.round(fish.mysteryMult)}X. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
+    const doubleText = (fish.valueMultiplier || 1) > 1 ? ` Wheel multiplier x${Math.round(fish.valueMultiplier)}.` : "";
+    return `Mystery prize opened at ${Math.round(fish.mysteryMult)}X.${doubleText} Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
   }
   return `Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
 }
