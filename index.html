@@ -58,11 +58,18 @@
           </div>
         </div>
 
-        <label class="dev-panel">
-          <span>DEV</span>
-          <input id="sharkToggle" type="checkbox" checked />
-          <strong>SHARKS</strong>
-        </label>
+        <div class="dev-panel">
+          <label class="dev-row">
+            <span>DEV</span>
+            <input id="sharkToggle" type="checkbox" checked />
+            <strong>SHARKS</strong>
+          </label>
+          <label class="dev-row dev-slider">
+            <span>CRIMSON</span>
+            <input id="crimsonChanceSlider" type="range" min="0" max="100" value="10" />
+            <strong id="crimsonChanceText">10%</strong>
+          </label>
+        </div>
       </section>
     </main>
 

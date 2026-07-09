@@ -17,6 +17,8 @@ const pullButton = document.getElementById("pullButton");
 const betDownButton = document.getElementById("betDownButton");
 const betUpButton = document.getElementById("betUpButton");
 const sharkToggle = document.getElementById("sharkToggle");
+const crimsonChanceSlider = document.getElementById("crimsonChanceSlider");
+const crimsonChanceText = document.getElementById("crimsonChanceText");
 
 const W = canvas.width;
 const H = canvas.height;
@@ -28,6 +30,7 @@ const betSteps = [10, 20, 50, 100, 200, 500, 1000];
 const TAU = Math.PI * 2;
 const doubleChance = 0.12;
 const bossDoubleChance = 0.5;
+const defaultCrimsonChance = 0.1;
 let audioCtx = null;
 let music = null;
 
@@ -436,7 +439,9 @@ function finalPrizeForDepth() {
 }
 
 function chooseRoundBoss() {
-  if (Math.random() > 0.1) return null;
+  const sliderChance = crimsonChanceSlider ? Number(crimsonChanceSlider.value) / 100 : defaultCrimsonChance;
+  const crimsonChance = Math.max(0, Math.min(1, Number.isFinite(sliderChance) ? sliderChance : defaultCrimsonChance));
+  if (Math.random() > crimsonChance) return null;
   return bossCatalog.crimson;
 }
 
@@ -575,6 +580,11 @@ function pauseForNoBalance() {
   deepButton.classList.remove("is-held");
   deepButton.disabled = true;
   pullButton.disabled = state.depth <= 0;
+}
+
+function updateCrimsonChanceText() {
+  if (!crimsonChanceSlider || !crimsonChanceText) return;
+  crimsonChanceText.textContent = `${crimsonChanceSlider.value}%`;
 }
 
 function startPull() {
@@ -1975,10 +1985,14 @@ if (sharkToggle) {
     state.sharksEnabled = sharkToggle.checked;
   });
 }
+if (crimsonChanceSlider) {
+  crimsonChanceSlider.addEventListener("input", updateCrimsonChanceText);
+}
 
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 document.addEventListener("selectstart", (event) => event.preventDefault());
 document.addEventListener("gesturestart", (event) => event.preventDefault());
 
+updateCrimsonChanceText();
 resetRound();
 requestAnimationFrame(frame);
