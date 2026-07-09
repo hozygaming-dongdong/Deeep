@@ -57,6 +57,8 @@ const state = {
   bestCandidate: null,
   roundBoss: null,
   bossOmen: null,
+  bossOmenTriggered: false,
+  bossOmenTimer: 0,
   pullProgress: 0,
   roulette: null,
   bossWheel: null,
@@ -495,6 +497,8 @@ function resetRound() {
   state.bestCandidate = null;
   state.roundBoss = chooseRoundBoss();
   state.bossOmen = omenForBoss(state.roundBoss);
+  state.bossOmenTriggered = false;
+  state.bossOmenTimer = 0;
   state.pullProgress = 0;
   state.roulette = null;
   state.bossWheel = null;
@@ -599,7 +603,9 @@ function startPull() {
   ensureMusic();
   state.status = "pulling";
   state.isHolding = false;
+  state.bossOmenTimer = 0;
   state.pullProgress = 0;
+  if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = true;
   pullButton.disabled = true;
   sound.pull();
@@ -1912,10 +1918,31 @@ function drawRouletteLegendItem(x, y, color, label) {
   ctx.restore();
 }
 
-function updateBossOmenOverlay() {
+function updateBossOmenOverlay(dt) {
   if (!bossOmenOverlay) return;
-  const isVisible = Boolean(state.bossOmen && state.depth >= state.bossOmen.activeFrom && state.depth < 82 && state.status !== "finished");
-  bossOmenOverlay.classList.toggle("hidden", !isVisible);
+
+  if (!state.bossOmen || state.status !== "diving" || state.depth >= 82) {
+    bossOmenOverlay.classList.add("hidden");
+    bossOmenOverlay.classList.remove("is-alert", "is-glow");
+    return;
+  }
+
+  if (!state.bossOmenTriggered && state.depth >= state.bossOmen.activeFrom) {
+    state.bossOmenTriggered = true;
+    state.bossOmenTimer = 2.5;
+  }
+
+  if (!state.bossOmenTriggered) {
+    bossOmenOverlay.classList.add("hidden");
+    return;
+  }
+
+  state.bossOmenTimer = Math.max(0, state.bossOmenTimer - dt);
+  const isAlert = state.bossOmenTimer > 0;
+  bossOmenOverlay.classList.toggle("hidden", false);
+  bossOmenOverlay.classList.toggle("is-alert", isAlert);
+  bossOmenOverlay.classList.toggle("is-glow", !isAlert);
+
   if (bossOmenTitle && state.bossOmen) {
     bossOmenTitle.textContent = state.bossOmen.text;
   }
@@ -2008,7 +2035,7 @@ function frame(now) {
   updateEffects(dt);
   addBubbles(dt);
   updateHud();
-  updateBossOmenOverlay();
+  updateBossOmenOverlay(dt);
   updateMusic();
   render();
   requestAnimationFrame(frame);

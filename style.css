@@ -316,6 +316,25 @@ strong {
   pointer-events: none;
 }
 
+.boss-omen-overlay.is-glow {
+  right: 0;
+  bottom: 104px;
+  left: 0;
+  height: 150px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 50% 120%, rgba(255, 49, 79, 0.72), rgba(255, 49, 79, 0.28) 34%, transparent 72%);
+  box-shadow: none;
+  animation: bossGlowPulse 1.2s ease-in-out infinite alternate;
+}
+
+.boss-omen-overlay.is-glow strong,
+.boss-omen-overlay.is-glow span {
+  display: none;
+}
+
 .boss-omen-overlay.hidden {
   display: none;
 }
@@ -341,6 +360,16 @@ strong {
   to {
     opacity: 1;
     transform: translateY(-2px) scale(1);
+  }
+}
+
+@keyframes bossGlowPulse {
+  from {
+    opacity: 0.42;
+  }
+
+  to {
+    opacity: 0.84;
   }
 }
 
