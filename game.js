@@ -16,6 +16,7 @@ const deepButton = document.getElementById("deepButton");
 const pullButton = document.getElementById("pullButton");
 const betDownButton = document.getElementById("betDownButton");
 const betUpButton = document.getElementById("betUpButton");
+const sharkToggle = document.getElementById("sharkToggle");
 
 const W = canvas.width;
 const H = canvas.height;
@@ -36,6 +37,7 @@ const state = {
   spent: 0,
   status: "ready",
   isHolding: false,
+  sharksEnabled: true,
   lastTickDepth: 0,
   hookY: hookDiveY,
   messageTimer: 0,
@@ -437,6 +439,7 @@ function resetRound() {
   state.spent = 0;
   state.status = "ready";
   state.isHolding = false;
+  state.sharksEnabled = sharkToggle ? sharkToggle.checked : state.sharksEnabled;
   state.lastTickDepth = 0;
   state.hookY = hookDiveY;
   state.messageTimer = 0;
@@ -538,12 +541,20 @@ function sinkStep(dt) {
     sound.tick();
 
     const risk = riskForDepth(state.lastTickDepth);
-    if (Math.random() < risk.rate) {
+    if (state.sharksEnabled && Math.random() < risk.rate) {
       triggerShark();
       return;
     }
 
-    if (state.balance < bet() || state.lastTickDepth >= maxDepth) {
+    if (state.balance < bet()) {
+      state.isHolding = false;
+      deepButton.classList.remove("is-held");
+      deepButton.disabled = true;
+      pullButton.disabled = false;
+      return;
+    }
+
+    if (state.lastTickDepth >= maxDepth) {
       startPull();
       return;
     }
@@ -1619,6 +1630,11 @@ pullButton.addEventListener("click", startPull);
 betDownButton.addEventListener("click", () => changeBet(-1));
 betUpButton.addEventListener("click", () => changeBet(1));
 newRoundButton.addEventListener("click", resetRound);
+if (sharkToggle) {
+  sharkToggle.addEventListener("change", () => {
+    state.sharksEnabled = sharkToggle.checked;
+  });
+}
 
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 document.addEventListener("selectstart", (event) => event.preventDefault());

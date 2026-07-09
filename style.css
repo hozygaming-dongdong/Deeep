@@ -114,6 +114,36 @@ canvas {
   justify-content: space-between;
 }
 
+.dev-panel {
+  position: absolute;
+  z-index: 6;
+  right: 12px;
+  top: 74px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 211, 106, 0.28);
+  border-radius: 8px;
+  background: rgba(5, 17, 27, 0.58);
+  color: #fff6da;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.dev-panel input {
+  width: 15px;
+  height: 15px;
+  accent-color: #ffd36a;
+}
+
+.dev-panel strong {
+  margin: 0;
+  font-size: 11px;
+}
+
 .label {
   display: block;
   color: var(--muted);
