@@ -27,6 +27,7 @@ const layerHeight = 145;
 const betSteps = [10, 20, 50, 100, 200, 500, 1000];
 const TAU = Math.PI * 2;
 const doubleChance = 0.12;
+const bossDoubleChance = 0.5;
 let audioCtx = null;
 let music = null;
 
@@ -47,6 +48,7 @@ const state = {
   shark: null,
   caughtFish: null,
   bestCandidate: null,
+  bossOmen: null,
   pullProgress: 0,
   roulette: null,
   struggleChecks: [],
@@ -71,6 +73,23 @@ const specialCatalog = [
   { name: "Crowned Tuna", mult: 600, minDepth: 50, weight: 10, shape: "tuna", catchRate: 0.14, holdRate: 0.28, color: "#f6b84e", accent: "#fff06e", size: 78, rarity: 5, tag: "EPIC" },
   { name: "Abyss Whale", mult: 1200, minDepth: 70, weight: 4, shape: "whale", catchRate: 0.08, holdRate: 0.2, color: "#192334", accent: "#6ff8ff", size: 118, rarity: 6, tag: "LEGENDARY" },
 ];
+
+const bossCatalog = {
+  crimson: {
+    name: "Crimson Leviathan",
+    mult: 110,
+    minDepth: 80,
+    catchRate: 0.72,
+    holdRate: 1,
+    color: "#b31328",
+    accent: "#ffdf6d",
+    size: 138,
+    rarity: 7,
+    tag: "BOSS",
+    isBoss: true,
+    bossType: "crimson",
+  },
+};
 
 function money(value) {
   return `$${Math.round(value).toLocaleString("en-US")}`;
@@ -305,9 +324,9 @@ function normalizeAngle(angle) {
   return ((angle % TAU) + TAU) % TAU;
 }
 
-function rouletteZones(escapeChance) {
+function rouletteZones(escapeChance, doubleRate = doubleChance) {
   const escapeArc = TAU * escapeChance;
-  const doubleArc = TAU * doubleChance;
+  const doubleArc = TAU * doubleRate;
   const escapeCenter = Math.PI * 1.5;
   const doubleCenter = Math.PI * 0.5;
   return {
@@ -415,13 +434,30 @@ function finalPrizeForDepth() {
   return options[Math.floor(Math.random() * options.length)];
 }
 
+function chooseBossOmen() {
+  if (Math.random() > 0.14) return null;
+  return {
+    type: "crimson",
+    color: "#ff314f",
+    text: "CRIMSON SIGNAL BELOW",
+    activeFrom: 40 + Math.random() * 10,
+  };
+}
+
+function bossForRound() {
+  if (!state.bossOmen) return null;
+  if (Math.random() > 0.72) return null;
+  return bossCatalog[state.bossOmen.type] || null;
+}
+
 function makeFishInstance(item, index, depth, overrides = {}) {
   const lanes = [125, 245, 365, 485, 595];
   return {
     ...item,
     ...overrides,
-    mult: randomizedMult(item.mult),
+    mult: overrides.fixedMult ?? randomizedMult(overrides.mult ?? item.mult),
     isSpecial: Boolean(item.shape),
+    isBoss: Boolean(item.isBoss || overrides.isBoss),
     x: overrides.x ?? lanes[index % lanes.length] + Math.random() * 54 - 27,
     depth: overrides.depth ?? Math.min(maxDepth - 0.2, depth + Math.random() * 0.9),
     dir: overrides.dir ?? (index % 2 === 0 ? 1 : -1),
@@ -447,6 +483,7 @@ function resetRound() {
   state.effects = [];
   state.caughtFish = null;
   state.bestCandidate = null;
+  state.bossOmen = chooseBossOmen();
   state.pullProgress = 0;
   state.roulette = null;
   state.struggleChecks = [];
@@ -465,6 +502,18 @@ function makeFish() {
     const item = specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
     fish.push(makeFishInstance(item, index, depth));
+  }
+
+  const boss = bossForRound();
+  if (boss) {
+    const bossDepth = 82 + Math.random() * 16;
+    fish.push(makeFishInstance(boss, fish.length, bossDepth, {
+      x: W / 2 + Math.random() * 140 - 70,
+      depth: bossDepth,
+      dir: Math.random() < 0.5 ? 1 : -1,
+      fixedMult: boss.mult,
+      isBoss: true,
+    }));
   }
 
   fish.push(makeFishInstance(finalPrizeForDepth(), fish.length, maxDepth, {
@@ -614,7 +663,11 @@ function updatePull(dt) {
     const pathBonus = pathDistance < 95 ? 0.18 : pathDistance < 175 ? 0.05 : -0.08;
     const chance = Math.max(0.04, Math.min(0.9, fish.catchRate + pathBonus));
 
-    if (!state.caughtFish && Math.random() < chance) {
+    const canHook = !state.caughtFish || (fish.isBoss && !state.caughtFish.isBoss);
+    if (canHook && Math.random() < chance) {
+      if (state.caughtFish && fish.isBoss) {
+        state.caughtFish.hooked = false;
+      }
       fish.hooked = true;
       state.caughtFish = fish;
       state.bestCandidate = fish;
@@ -644,6 +697,20 @@ function struggleProfile(fish) {
 }
 
 function setupStruggleChecks(fish) {
+  if (fish.isBoss) {
+    const caughtDepth = Math.max(0.6, state.depth);
+    state.struggleChecks = [0.2, 0.4, 0.6, 0.8].map((progress, index) => ({
+      index: index + 1,
+      total: 4,
+      depth: Math.max(0.25, caughtDepth * (1 - progress)),
+      escapeChance: 1 - bossDoubleChance,
+      doubleChance: bossDoubleChance,
+      mode: "boss",
+      done: false,
+    }));
+    return;
+  }
+
   const profile = struggleProfile(fish);
   const caughtDepth = Math.max(0.6, state.depth);
   state.struggleChecks = profile.progress.slice(0, profile.count).map((progress, index) => ({
@@ -662,7 +729,8 @@ function maybeStartStruggle() {
   if (!check || state.depth <= 0.2) return;
 
   check.done = true;
-  const zones = rouletteZones(check.escapeChance);
+  const checkDoubleChance = check.doubleChance ?? doubleChance;
+  const zones = rouletteZones(check.escapeChance, checkDoubleChance);
   const landingAngle = pickRouletteLanding(zones);
   const outcome = outcomeForRouletteAngle(landingAngle, zones);
 
@@ -673,8 +741,9 @@ function maybeStartStruggle() {
     settleDuration: 0.75,
     settled: false,
     outcome,
+    mode: check.mode || "fish",
     escapeChance: check.escapeChance,
-    doubleChance,
+    doubleChance: checkDoubleChance,
     checkIndex: check.index,
     checkTotal: check.total,
     escapeStart: zones.escape.start,
@@ -735,10 +804,19 @@ function updateRoulette(dt) {
   });
 
   if (visibleOutcome === "ESCAPE") {
+    const escapedName = state.caughtFish ? state.caughtFish.name : "Fish";
+    const isBossEscape = roulette.mode === "boss";
     if (state.caughtFish) state.caughtFish.escaped = true;
     state.caughtFish = null;
     state.roulette = null;
-    showResult("ESCAPED", "Fish Broke Free", "The struggle wheel landed on ESCAPE. Payout is $0.", true);
+    showResult(
+      isBossEscape ? "BOSS ESCAPED" : "ESCAPED",
+      isBossEscape ? `${escapedName} Broke Free` : "Fish Broke Free",
+      isBossEscape
+        ? "The boss gamble landed on ESCAPE. Payout is $0."
+        : "The struggle wheel landed on ESCAPE. Payout is $0.",
+      true
+    );
     return;
   }
 
@@ -763,7 +841,14 @@ function finishPull() {
   const payout = bet() * fish.mult * (fish.valueMultiplier || 1);
   state.balance += payout;
   sound.win();
-  showResult("CAUGHT", `${fish.name} ${money(payout)}`, `Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`, true);
+  showResult(
+    fish.isBoss ? "BOSS LANDED" : "CAUGHT",
+    `${fish.name} ${money(payout)}`,
+    fish.isBoss
+      ? `Four boss gambles cleared. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`
+      : `Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`,
+    true
+  );
 }
 
 function showResult(kicker, title, body, canRestart) {
@@ -1068,6 +1153,10 @@ function drawFish(fish) {
   if (fish.escaped) return;
   const fishY = fish.hooked ? fish.y : yForDepth(fish.depth) + Math.sin(fish.phase) * 9;
   if (!fish.hooked && (fishY < hookTop - 90 || fishY > H - 230)) return;
+  if (fish.isBoss) {
+    drawBossCatch(fish, fishY);
+    return;
+  }
   if (fish.isSpecial) {
     drawSpecialCatch(fish, fishY);
     return;
@@ -1226,6 +1315,99 @@ function drawSpecialCatch(fish, fishY) {
     ctx.scale(fish.dir, 1);
     drawDoubleBadge(0, -fish.size - 58, fish.valueMultiplier || 2);
   }
+  ctx.restore();
+}
+
+function drawBossCatch(fish, fishY) {
+  const struggle = fish.hooked ? Math.sin(state.time * 28) * 18 : Math.sin(state.time * 2 + fish.phase) * 10;
+  const bob = Math.sin(state.time * 3 + fish.phase) * 7;
+  const pulse = 1 + Math.sin(state.time * 5 + fish.phase) * 0.045;
+  const isDoubled = (fish.valueMultiplier || 1) > 1;
+
+  ctx.save();
+  ctx.translate(fish.x + struggle, fishY + bob);
+  ctx.scale(fish.dir * pulse, pulse);
+
+  const glow = 0.42 + Math.sin(state.time * 6) * 0.08;
+  ctx.save();
+  ctx.globalAlpha = glow;
+  ctx.fillStyle = "#ff314f";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, fish.size * 1.7, fish.size * 0.88, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = fish.color;
+  ctx.strokeStyle = "#4c0610";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, fish.size * 1.18, fish.size * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#7d0718";
+  ctx.beginPath();
+  ctx.moveTo(-fish.size * 1.05, 0);
+  ctx.lineTo(-fish.size * 1.72, -fish.size * 0.44);
+  ctx.lineTo(-fish.size * 1.55, fish.size * 0.48);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = fish.accent;
+  ctx.strokeStyle = "#4c0610";
+  ctx.lineWidth = 4;
+  for (let i = -2; i <= 2; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(-fish.size * 0.46 + i * fish.size * 0.24, -fish.size * 0.35);
+    ctx.lineTo(-fish.size * 0.22 + i * fish.size * 0.22, -fish.size * 0.9);
+    ctx.lineTo(-fish.size * 0.08 + i * fish.size * 0.2, -fish.size * 0.28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#fff6d8";
+  ctx.beginPath();
+  ctx.ellipse(fish.size * 0.55, -fish.size * 0.12, fish.size * 0.16, fish.size * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#13040a";
+  ctx.beginPath();
+  ctx.arc(fish.size * 0.6, -fish.size * 0.12, fish.size * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff3d1";
+  for (let i = 0; i < 7; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(fish.size * (0.52 + i * 0.09), fish.size * 0.13);
+    ctx.lineTo(fish.size * (0.57 + i * 0.09), fish.size * 0.34);
+    ctx.lineTo(fish.size * (0.63 + i * 0.09), fish.size * 0.13);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  if (isDoubled) {
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "#ffd36a";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, fish.size * 1.24, fish.size * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.scale(fish.dir, 1);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ff6b7b";
+  ctx.font = "950 18px Trebuchet MS";
+  ctx.fillText("BOSS", 0, -fish.size * 0.72);
+  ctx.fillStyle = "#fff2c7";
+  ctx.font = "950 28px Trebuchet MS";
+  ctx.fillText(fishValue(fish), 0, -fish.size * 0.5);
+  if (fish.hooked && isDoubled) {
+    drawDoubleBadge(0, -fish.size * 0.92, fish.valueMultiplier || 2);
+  }
+
   ctx.restore();
 }
 
@@ -1408,6 +1590,7 @@ function drawAbyssWhale(fish) {
 function drawRoulette() {
   const roulette = state.roulette;
   if (!roulette) return;
+  const isBossRoulette = roulette.mode === "boss";
 
   const progress = Math.min(1, roulette.timer / roulette.duration);
   const easeOut = 1 - Math.pow(1 - progress, 3);
@@ -1430,10 +1613,16 @@ function drawRoulette() {
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff6da";
   ctx.font = "900 24px Trebuchet MS";
-  ctx.fillText("STRUGGLE CHECK", cx, cy - 100);
+  ctx.fillText(isBossRoulette ? "BOSS GAMBLE" : "STRUGGLE CHECK", cx, cy - 100);
   ctx.font = "800 16px Trebuchet MS";
   ctx.fillStyle = "#a9d8eb";
-  ctx.fillText(`Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`, cx, cy - 76);
+  ctx.fillText(
+    isBossRoulette
+      ? `Round ${roulette.checkIndex}/${roulette.checkTotal} - Double 50% / Escape 50%`
+      : `Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`,
+    cx,
+    cy - 76
+  );
 
   ctx.translate(cx, cy + 10);
 
@@ -1483,9 +1672,11 @@ function drawRoulette() {
   ctx.arc(0, 0, 14, 0, Math.PI * 2);
   ctx.fill();
 
-  drawRouletteLegendItem(-82, radius + 35, "#cf344a", "ESCAPE");
-  drawRouletteLegendItem(0, radius + 35, "#f4c542", "DOUBLE");
-  drawRouletteLegendItem(82, radius + 35, "#2aa866", "SAFE");
+  drawRouletteLegendItem(isBossRoulette ? -48 : -82, radius + 35, "#cf344a", "ESCAPE");
+  drawRouletteLegendItem(isBossRoulette ? 48 : 0, radius + 35, "#f4c542", "DOUBLE");
+  if (!isBossRoulette) {
+    drawRouletteLegendItem(82, radius + 35, "#2aa866", "SAFE");
+  }
 
   if (progress >= 1) {
     const visibleOutcome = outcomeForRouletteAngle(roulette.finalPointerAngle, {
@@ -1515,6 +1706,30 @@ function drawRouletteLegendItem(x, y, color, label) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, 0, 1);
+  ctx.restore();
+}
+
+function drawBossOmen() {
+  if (!state.bossOmen || state.depth < state.bossOmen.activeFrom || state.depth >= 82) return;
+
+  const pulse = 0.5 + Math.sin(state.time * 5.5) * 0.22;
+  const intensity = Math.max(0, Math.min(1, (state.depth - state.bossOmen.activeFrom) / 10));
+
+  ctx.save();
+  const gradient = ctx.createRadialGradient(W / 2, H + 80, 20, W / 2, H + 80, 430);
+  gradient.addColorStop(0, `rgba(255, 49, 79, ${0.34 * intensity + pulse * 0.12})`);
+  gradient.addColorStop(0.42, `rgba(255, 49, 79, ${0.16 * intensity})`);
+  gradient.addColorStop(1, "rgba(255, 49, 79, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, H - 360, W, 360);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = `rgba(255, 224, 190, ${0.72 + pulse * 0.28})`;
+  ctx.font = "950 24px Trebuchet MS";
+  ctx.fillText(state.bossOmen.text, W / 2, H - 230);
+  ctx.font = "800 15px Trebuchet MS";
+  ctx.fillStyle = `rgba(255, 125, 135, ${0.72 + pulse * 0.18})`;
+  ctx.fillText("A huge target may wake after 80F", W / 2, H - 202);
   ctx.restore();
 }
 
@@ -1572,6 +1787,7 @@ function drawShark() {
 
 function render() {
   drawBackground();
+  drawBossOmen();
   for (const fish of state.fish) drawFish(fish);
   drawHook();
   drawShark();
