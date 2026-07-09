@@ -1602,6 +1602,10 @@ function drawRoulette() {
   const roulette = state.roulette;
   if (!roulette) return;
   const isBossRoulette = roulette.mode === "boss";
+  if (isBossRoulette) {
+    drawBossRoulette(roulette);
+    return;
+  }
 
   const progress = Math.min(1, roulette.timer / roulette.duration);
   const easeOut = 1 - Math.pow(1 - progress, 3);
@@ -1624,16 +1628,10 @@ function drawRoulette() {
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff6da";
   ctx.font = "900 24px Trebuchet MS";
-  ctx.fillText(isBossRoulette ? "BOSS GAMBLE" : "STRUGGLE CHECK", cx, cy - 100);
+  ctx.fillText("STRUGGLE CHECK", cx, cy - 100);
   ctx.font = "800 16px Trebuchet MS";
   ctx.fillStyle = "#a9d8eb";
-  ctx.fillText(
-    isBossRoulette
-      ? `Round ${roulette.checkIndex}/${roulette.checkTotal} - Double 50% / Escape 50%`
-      : `Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`,
-    cx,
-    cy - 76
-  );
+  ctx.fillText(`Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`, cx, cy - 76);
 
   ctx.translate(cx, cy + 10);
 
@@ -1683,11 +1681,9 @@ function drawRoulette() {
   ctx.arc(0, 0, 14, 0, Math.PI * 2);
   ctx.fill();
 
-  drawRouletteLegendItem(isBossRoulette ? -48 : -82, radius + 35, "#cf344a", "ESCAPE");
-  drawRouletteLegendItem(isBossRoulette ? 48 : 0, radius + 35, "#f4c542", "DOUBLE");
-  if (!isBossRoulette) {
-    drawRouletteLegendItem(82, radius + 35, "#2aa866", "SAFE");
-  }
+  drawRouletteLegendItem(-82, radius + 35, "#cf344a", "ESCAPE");
+  drawRouletteLegendItem(0, radius + 35, "#f4c542", "DOUBLE");
+  drawRouletteLegendItem(82, radius + 35, "#2aa866", "SAFE");
 
   if (progress >= 1) {
     const visibleOutcome = outcomeForRouletteAngle(roulette.finalPointerAngle, {
@@ -1697,6 +1693,101 @@ function drawRoulette() {
     ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : visibleOutcome === "DOUBLE" ? "#ffd36a" : "#78e6a3";
     ctx.font = "950 30px Trebuchet MS";
     ctx.fillText(visibleOutcome, 0, radius + 78);
+  }
+
+  ctx.restore();
+}
+
+function drawBossRoulette(roulette) {
+  const progress = Math.min(1, roulette.timer / roulette.duration);
+  const easeOut = 1 - Math.pow(1 - progress, 3);
+  const pointerAngle = roulette.startAngle + roulette.spins * Math.PI * 2 * easeOut
+    + (roulette.finalPointerAngle - roulette.startAngle) * easeOut;
+  const cx = W / 2;
+  const cy = 330;
+  const radius = 108;
+  const pulse = 0.5 + Math.sin(state.time * 8) * 0.18;
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  ctx.fillStyle = "rgba(31, 3, 12, 0.9)";
+  ctx.beginPath();
+  ctx.roundRect(cx - 176, cy - 154, 352, 336, 18);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(255, 49, 79, ${0.72 + pulse})`;
+  ctx.lineWidth = 5;
+  ctx.stroke();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff1d1";
+  ctx.font = "950 29px Trebuchet MS";
+  ctx.fillText("BOSS GAMBLE", cx, cy - 116);
+  ctx.font = "900 17px Trebuchet MS";
+  ctx.fillStyle = "#ff9aa7";
+  ctx.fillText(`Round ${roulette.checkIndex}/${roulette.checkTotal} - DOUBLE or ESCAPE`, cx, cy - 88);
+
+  ctx.translate(cx, cy + 14);
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.arc(0, 0, radius, Math.PI, Math.PI * 2);
+  ctx.closePath();
+  ctx.fillStyle = "#cf344a";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.arc(0, 0, radius, 0, Math.PI);
+  ctx.closePath();
+  ctx.fillStyle = "#f4c542";
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(255, 246, 218, 0.64)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(-radius, 0);
+  ctx.lineTo(radius, 0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = "#fff4f4";
+  ctx.font = "950 25px Trebuchet MS";
+  ctx.fillText("ESCAPE", 0, -42);
+  ctx.fillStyle = "#3b230a";
+  ctx.fillText("DOUBLE", 0, 56);
+
+  ctx.save();
+  ctx.rotate(pointerAngle);
+  ctx.fillStyle = "#fff2c7";
+  ctx.beginPath();
+  ctx.moveTo(radius + 26, 0);
+  ctx.lineTo(radius - 14, -16);
+  ctx.lineTo(radius - 14, 16);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#5b1119";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = "#fff6da";
+  ctx.beginPath();
+  ctx.arc(0, 0, 16, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawRouletteLegendItem(-58, radius + 38, "#cf344a", "ESCAPE");
+  drawRouletteLegendItem(58, radius + 38, "#f4c542", "DOUBLE");
+
+  if (progress >= 1) {
+    const visibleOutcome = outcomeForRouletteAngle(roulette.finalPointerAngle, {
+      escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
+      double: { start: roulette.doubleStart, end: roulette.doubleEnd },
+    });
+    ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : "#ffd36a";
+    ctx.font = "950 34px Trebuchet MS";
+    ctx.fillText(visibleOutcome, 0, radius + 82);
   }
 
   ctx.restore();
@@ -1723,24 +1814,28 @@ function drawRouletteLegendItem(x, y, color, label) {
 function drawBossOmen() {
   if (!state.bossOmen || state.depth < state.bossOmen.activeFrom || state.depth >= 82) return;
 
-  const pulse = 0.5 + Math.sin(state.time * 5.5) * 0.22;
+  const pulse = 0.5 + Math.sin(state.time * 5.5) * 0.32;
   const intensity = Math.max(0, Math.min(1, (state.depth - state.bossOmen.activeFrom) / 10));
 
   ctx.save();
   const gradient = ctx.createRadialGradient(W / 2, H + 80, 20, W / 2, H + 80, 430);
-  gradient.addColorStop(0, `rgba(255, 49, 79, ${0.34 * intensity + pulse * 0.12})`);
-  gradient.addColorStop(0.42, `rgba(255, 49, 79, ${0.16 * intensity})`);
+  gradient.addColorStop(0, `rgba(255, 49, 79, ${0.48 * intensity + pulse * 0.16})`);
+  gradient.addColorStop(0.42, `rgba(255, 49, 79, ${0.24 * intensity})`);
   gradient.addColorStop(1, "rgba(255, 49, 79, 0)");
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, H - 360, W, 360);
+  ctx.fillRect(0, H - 430, W, 430);
+
+  ctx.strokeStyle = `rgba(255, 49, 79, ${0.4 + pulse * 0.8})`;
+  ctx.lineWidth = 7;
+  ctx.strokeRect(18, 18, W - 36, H - 36);
 
   ctx.textAlign = "center";
   ctx.fillStyle = `rgba(255, 224, 190, ${0.72 + pulse * 0.28})`;
-  ctx.font = "950 24px Trebuchet MS";
-  ctx.fillText(state.bossOmen.text, W / 2, H - 230);
-  ctx.font = "800 15px Trebuchet MS";
+  ctx.font = "950 30px Trebuchet MS";
+  ctx.fillText(state.bossOmen.text, W / 2, H - 270);
+  ctx.font = "900 18px Trebuchet MS";
   ctx.fillStyle = `rgba(255, 125, 135, ${0.72 + pulse * 0.18})`;
-  ctx.fillText("A huge target may wake after 80F", W / 2, H - 202);
+  ctx.fillText("WARNING: Boss target appears after 80F", W / 2, H - 238);
   ctx.restore();
 }
 
@@ -1798,12 +1893,12 @@ function drawShark() {
 
 function render() {
   drawBackground();
-  drawBossOmen();
   for (const fish of state.fish) drawFish(fish);
   drawHook();
   drawShark();
   drawEffects();
   drawDepthShade(Math.min(1, state.depth / maxDepth));
+  drawBossOmen();
   drawRoulette();
 
   if (state.status === "ready") {
