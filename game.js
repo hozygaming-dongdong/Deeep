@@ -23,6 +23,10 @@ const devControls = document.getElementById("devControls");
 const sharkToggle = document.getElementById("sharkToggle");
 const crimsonChanceSlider = document.getElementById("crimsonChanceSlider");
 const crimsonChanceText = document.getElementById("crimsonChanceText");
+const octopusChanceSlider = document.getElementById("octopusChanceSlider");
+const octopusChanceText = document.getElementById("octopusChanceText");
+const mysteryChanceSlider = document.getElementById("mysteryChanceSlider");
+const mysteryChanceText = document.getElementById("mysteryChanceText");
 
 const W = canvas.width;
 const H = canvas.height;
@@ -35,6 +39,8 @@ const TAU = Math.PI * 2;
 const doubleChance = 0.12;
 const bossDoubleChance = 0.5;
 const defaultCrimsonChance = 0.1;
+const defaultOctopusChance = 0.08;
+const defaultMysteryChance = 0.06;
 const musicVolumeBoost = 1.8;
 const sfxVolumeBoost = 2.4;
 let audioCtx = null;
@@ -102,6 +108,34 @@ const bossCatalog = {
     isBoss: true,
     bossType: "crimson",
   },
+  octopus: {
+    name: "Abyss Octopus",
+    mult: 90,
+    minDepth: 80,
+    catchRate: 0.82,
+    holdRate: 1,
+    color: "#6f35d6",
+    accent: "#e6b3ff",
+    size: 168,
+    rarity: 7,
+    tag: "BOSS",
+    isBoss: true,
+    bossType: "octopus",
+  },
+  mystery: {
+    name: "Golden Vault Beast",
+    mult: 100,
+    minDepth: 80,
+    catchRate: 0.82,
+    holdRate: 1,
+    color: "#d89b22",
+    accent: "#fff1a8",
+    size: 170,
+    rarity: 7,
+    tag: "BOSS",
+    isBoss: true,
+    bossType: "mystery",
+  },
 };
 
 function money(value) {
@@ -109,6 +143,8 @@ function money(value) {
 }
 
 function fishValue(fish) {
+  if (fish?.bossType === "mystery" && !fish.mysteryMult) return "MYSTERY";
+  if (fish?.bossType === "octopus") return money(bet() * (fish.mult + (fish.collectorBonusMult || 0)));
   return money(bet() * fish.mult * (fish.valueMultiplier || 1));
 }
 
@@ -450,20 +486,37 @@ function finalPrizeForDepth() {
 }
 
 function chooseRoundBoss() {
-  const sliderChance = crimsonChanceSlider ? Number(crimsonChanceSlider.value) / 100 : defaultCrimsonChance;
-  const crimsonChance = Math.max(0, Math.min(1, Number.isFinite(sliderChance) ? sliderChance : defaultCrimsonChance));
-  if (Math.random() > crimsonChance) return null;
-  return bossCatalog.crimson;
+  const weights = [
+    { boss: bossCatalog.crimson, weight: chanceSliderValue(crimsonChanceSlider, defaultCrimsonChance) },
+    { boss: bossCatalog.octopus, weight: chanceSliderValue(octopusChanceSlider, defaultOctopusChance) },
+    { boss: bossCatalog.mystery, weight: chanceSliderValue(mysteryChanceSlider, defaultMysteryChance) },
+  ];
+  const totalWeight = weights.reduce((total, item) => total + item.weight, 0);
+  const spawnChance = Math.min(1, totalWeight);
+  if (totalWeight <= 0 || Math.random() > spawnChance) return null;
+
+  let roll = Math.random() * totalWeight;
+  for (const item of weights) {
+    roll -= item.weight;
+    if (roll <= 0) return item.boss;
+  }
+  return weights[0].boss;
 }
 
 function omenForBoss(boss) {
   if (!boss) return null;
+  const color = boss.bossType === "octopus" ? "#b86cff" : boss.bossType === "mystery" ? "#ffd36a" : "#ff314f";
   return {
     type: boss.bossType,
-    color: "#ff314f",
+    color,
     text: `${boss.name.toUpperCase()} BELOW`,
     activeFrom: 40 + Math.random() * 10,
   };
+}
+
+function chanceSliderValue(slider, fallback) {
+  const value = slider ? Number(slider.value) / 100 : fallback;
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : fallback));
 }
 
 function makeFishInstance(item, index, depth, overrides = {}) {
@@ -602,6 +655,12 @@ function updateCrimsonChanceText() {
   crimsonChanceText.textContent = `${crimsonChanceSlider.value}%`;
 }
 
+function updateBossChanceText() {
+  updateCrimsonChanceText();
+  if (octopusChanceSlider && octopusChanceText) octopusChanceText.textContent = `${octopusChanceSlider.value}%`;
+  if (mysteryChanceSlider && mysteryChanceText) mysteryChanceText.textContent = `${mysteryChanceSlider.value}%`;
+}
+
 function startPull() {
   ensureAudio();
   ensureMusic();
@@ -690,6 +749,21 @@ function updatePull(dt) {
   for (const fish of state.fish) {
     if (fish.attempted || fish.depth < state.depth || fish.depth > previousDepth) continue;
 
+    if (state.caughtFish?.bossType === "octopus" && !fish.isBoss) {
+      const pathDistance = Math.abs(fish.x - W / 2);
+      const grabChance = pathDistance < 150 ? 0.62 : pathDistance < 260 ? 0.34 : 0.12;
+      fish.attempted = true;
+      if (Math.random() < grabChance) {
+        fish.escaped = true;
+        state.caughtFish.collectorBonusMult = (state.caughtFish.collectorBonusMult || 0) + fish.mult;
+        state.caughtFish.collectorCount = (state.caughtFish.collectorCount || 0) + 1;
+        state.bestCandidate = state.caughtFish;
+        addCollectorEffect(fish, state.caughtFish);
+        sound.hook();
+      }
+      continue;
+    }
+
     fish.attempted = true;
     const pathDistance = Math.abs(fish.x - W / 2);
     const pathBonus = pathDistance < 95 ? 0.18 : pathDistance < 175 ? 0.05 : -0.08;
@@ -730,6 +804,10 @@ function struggleProfile(fish) {
 
 function setupStruggleChecks(fish) {
   if (fish.isBoss) {
+    if (fish.bossType !== "crimson") {
+      state.struggleChecks = [];
+      return;
+    }
     const caughtDepth = Math.max(0.6, state.depth);
     state.struggleChecks = [0.2, 0.4, 0.6, 0.8].map((progress, index) => ({
       index: index + 1,
@@ -957,17 +1035,47 @@ function finishPull() {
   }
 
   const fish = state.caughtFish;
-  const payout = bet() * fish.mult * (fish.valueMultiplier || 1);
+  const payout = payoutForCatch(fish);
   state.balance += payout;
   sound.win();
   showResult(
     fish.isBoss ? "BOSS LANDED" : "CAUGHT",
     `${fish.name} ${money(payout)}`,
-    fish.isBoss
-      ? `Four boss gambles cleared. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`
-      : `Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`,
+    resultBodyForCatch(fish, payout),
     true
   );
+}
+
+function payoutForCatch(fish) {
+  if (fish.bossType === "octopus") {
+    return bet() * (fish.mult + (fish.collectorBonusMult || 0));
+  }
+  if (fish.bossType === "mystery") {
+    if (!fish.mysteryMult) fish.mysteryMult = mysteryPrizeMult();
+    return bet() * fish.mysteryMult;
+  }
+  return bet() * fish.mult * (fish.valueMultiplier || 1);
+}
+
+function resultBodyForCatch(fish, payout) {
+  if (fish.bossType === "crimson") {
+    return `Four boss gambles cleared. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
+  }
+  if (fish.bossType === "octopus") {
+    return `Collector grabbed ${fish.collectorCount || 0} fish. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
+  }
+  if (fish.bossType === "mystery") {
+    return `Mystery prize opened at ${Math.round(fish.mysteryMult)}X. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
+  }
+  return `Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
+}
+
+function mysteryPrizeMult() {
+  const roll = Math.random();
+  if (roll < 0.55) return Math.round(100 + Math.random() * 400);
+  if (roll < 0.85) return Math.round(500 + Math.random() * 1500);
+  if (roll < 0.97) return Math.round(2000 + Math.random() * 3500);
+  return Math.round(6000 + Math.random() * 4000);
 }
 
 function showResult(kicker, title, body, canRestart) {
@@ -1019,6 +1127,18 @@ function addDoubleEffect(fish) {
     timer: 0,
     duration: 1.1,
     multiplier: fish.valueMultiplier || 2,
+  });
+}
+
+function addCollectorEffect(fish, boss) {
+  state.effects.push({
+    type: "collector",
+    x: fish.x,
+    y: yForDepth(fish.depth),
+    timer: 0,
+    duration: 1.0,
+    value: bet() * fish.mult,
+    total: bet() * ((boss.mult || 0) + (boss.collectorBonusMult || 0)),
   });
 }
 
@@ -1105,6 +1225,22 @@ function drawDepthShade(depthRatio) {
 
 function drawEffects() {
   for (const effect of state.effects) {
+    if (effect.type === "collector") {
+      const progress = Math.min(1, effect.timer / effect.duration);
+      const alpha = 1 - progress;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = "#e6b3ff";
+      ctx.strokeStyle = "#261044";
+      ctx.lineWidth = 4;
+      ctx.font = "950 30px Trebuchet MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.strokeText(`GRAB +${money(effect.value)}`, effect.x, effect.y - 36 - progress * 60);
+      ctx.fillText(`GRAB +${money(effect.value)}`, effect.x, effect.y - 36 - progress * 60);
+      ctx.restore();
+      continue;
+    }
     if (effect.type !== "double") continue;
     const progress = Math.min(1, effect.timer / effect.duration);
     const alpha = 1 - progress;
@@ -1440,6 +1576,15 @@ function drawSpecialCatch(fish, fishY) {
 }
 
 function drawBossCatch(fish, fishY) {
+  if (fish.bossType === "octopus") {
+    drawOctopusBoss(fish, fishY);
+    return;
+  }
+  if (fish.bossType === "mystery") {
+    drawMysteryBoss(fish, fishY);
+    return;
+  }
+
   const struggle = fish.hooked ? Math.sin(state.time * 28) * 24 : Math.sin(state.time * 2 + fish.phase) * 16;
   const bob = Math.sin(state.time * 3 + fish.phase) * 10;
   const pulse = 1 + Math.sin(state.time * 5 + fish.phase) * 0.06;
@@ -1538,6 +1683,120 @@ function drawBossCatch(fish, fishY) {
     drawDoubleBadge(0, -fish.size * 0.92, fish.valueMultiplier || 2);
   }
 
+  ctx.restore();
+}
+
+function drawOctopusBoss(fish, fishY) {
+  const wiggle = fish.hooked ? Math.sin(state.time * 24) * 20 : Math.sin(state.time * 2 + fish.phase) * 14;
+  const pulse = 1 + Math.sin(state.time * 5 + fish.phase) * 0.055;
+  ctx.save();
+  ctx.translate(fish.x + wiggle, fishY + Math.sin(state.time * 3) * 8);
+  ctx.scale(pulse, pulse);
+
+  ctx.save();
+  ctx.globalAlpha = 0.58;
+  ctx.fillStyle = "#b86cff";
+  ctx.beginPath();
+  ctx.ellipse(0, 10, fish.size * 1.35, fish.size * 1.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = "#3a146e";
+  ctx.lineWidth = 14;
+  ctx.lineCap = "round";
+  for (let i = -3; i <= 3; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(i * fish.size * 0.16, fish.size * 0.28);
+    ctx.quadraticCurveTo(i * fish.size * 0.22 + Math.sin(state.time * 4 + i) * 30, fish.size * 0.85, i * fish.size * 0.46, fish.size * 1.16);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = fish.color;
+  ctx.strokeStyle = "#261044";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.ellipse(0, -fish.size * 0.12, fish.size * 0.74, fish.size * 0.58, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#fff6da";
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.arc(side * fish.size * 0.26, -fish.size * 0.22, fish.size * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#14051f";
+    ctx.beginPath();
+    ctx.arc(side * fish.size * 0.28, -fish.size * 0.2, fish.size * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff6da";
+  }
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#e6b3ff";
+  ctx.font = "950 28px Trebuchet MS";
+  ctx.fillText("COLLECTOR", 0, -fish.size * 0.86);
+  ctx.fillStyle = "#fff2c7";
+  ctx.font = "950 34px Trebuchet MS";
+  ctx.fillText(fishValue(fish), 0, -fish.size * 0.64);
+  if (fish.collectorCount) {
+    ctx.fillStyle = "#d9ffff";
+    ctx.font = "900 20px Trebuchet MS";
+    ctx.fillText(`GRABBED ${fish.collectorCount}`, 0, -fish.size * 0.48);
+  }
+  ctx.restore();
+}
+
+function drawMysteryBoss(fish, fishY) {
+  const wobble = fish.hooked ? Math.sin(state.time * 22) * 18 : Math.sin(state.time * 2 + fish.phase) * 12;
+  const pulse = 1 + Math.sin(state.time * 6 + fish.phase) * 0.06;
+  ctx.save();
+  ctx.translate(fish.x + wobble, fishY + Math.sin(state.time * 3) * 8);
+  ctx.scale(fish.dir * pulse, pulse);
+
+  ctx.save();
+  ctx.globalAlpha = 0.62;
+  ctx.fillStyle = "#ffd36a";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, fish.size * 1.35, fish.size * 0.88, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = fish.color;
+  ctx.strokeStyle = "#5e3308";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, fish.size * 0.92, fish.size * 0.52, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#fff1a8";
+  ctx.strokeStyle = "#5e3308";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(-fish.size * 0.72, 0);
+  ctx.lineTo(-fish.size * 1.28, -fish.size * 0.42);
+  ctx.lineTo(-fish.size * 1.16, fish.size * 0.44);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#fff6da";
+  ctx.beginPath();
+  ctx.arc(fish.size * 0.42, -fish.size * 0.12, fish.size * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#171004";
+  ctx.beginPath();
+  ctx.arc(fish.size * 0.46, -fish.size * 0.11, fish.size * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.scale(fish.dir, 1);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff1a8";
+  ctx.font = "950 28px Trebuchet MS";
+  ctx.fillText("MYSTERY", 0, -fish.size * 0.76);
+  ctx.fillStyle = "#fff6da";
+  ctx.font = "950 34px Trebuchet MS";
+  ctx.fillText(fish.mysteryMult ? `${Math.round(fish.mysteryMult)}X` : "100X-10000X", 0, -fish.size * 0.56);
   ctx.restore();
 }
 
@@ -1949,6 +2208,7 @@ function updateBossOmenOverlay(dt) {
 
   if (bossOmenTitle && state.bossOmen) {
     bossOmenTitle.textContent = state.bossOmen.text;
+    bossOmenOverlay.style.setProperty("--boss-omen-color", state.bossOmen.color);
   }
 }
 
@@ -2095,13 +2355,19 @@ if (devToggleButton && devControls) {
   });
 }
 if (crimsonChanceSlider) {
-  crimsonChanceSlider.addEventListener("input", updateCrimsonChanceText);
+  crimsonChanceSlider.addEventListener("input", updateBossChanceText);
+}
+if (octopusChanceSlider) {
+  octopusChanceSlider.addEventListener("input", updateBossChanceText);
+}
+if (mysteryChanceSlider) {
+  mysteryChanceSlider.addEventListener("input", updateBossChanceText);
 }
 
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 document.addEventListener("selectstart", (event) => event.preventDefault());
 document.addEventListener("gesturestart", (event) => event.preventDefault());
 
-updateCrimsonChanceText();
+updateBossChanceText();
 resetRound();
 requestAnimationFrame(frame);

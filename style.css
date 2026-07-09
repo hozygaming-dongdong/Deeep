@@ -301,17 +301,17 @@ strong {
   display: grid;
   gap: 4px;
   padding: 15px 16px;
-  border: 3px solid rgba(255, 49, 79, 0.92);
+  border: 3px solid var(--boss-omen-color, #ff314f);
   border-radius: 8px;
   background:
-    radial-gradient(circle at 50% 120%, rgba(255, 49, 79, 0.52), transparent 64%),
+    radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--boss-omen-color, #ff314f) 52%, transparent), transparent 64%),
     rgba(34, 3, 12, 0.86);
   color: #fff1d1;
   text-align: center;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.52);
   box-shadow:
-    0 0 34px rgba(255, 49, 79, 0.72),
-    inset 0 0 22px rgba(255, 49, 79, 0.28);
+    0 0 34px color-mix(in srgb, var(--boss-omen-color, #ff314f) 72%, transparent),
+    inset 0 0 22px color-mix(in srgb, var(--boss-omen-color, #ff314f) 28%, transparent);
   animation: bossOmenPulse 0.72s ease-in-out infinite alternate;
   pointer-events: none;
 }
@@ -325,7 +325,7 @@ strong {
   border: 0;
   border-radius: 0;
   background:
-    radial-gradient(circle at 50% 120%, rgba(255, 49, 79, 0.72), rgba(255, 49, 79, 0.28) 34%, transparent 72%);
+    radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--boss-omen-color, #ff314f) 72%, transparent), color-mix(in srgb, var(--boss-omen-color, #ff314f) 28%, transparent) 34%, transparent 72%);
   box-shadow: none;
   animation: bossGlowPulse 1.2s ease-in-out infinite alternate;
 }
@@ -346,7 +346,7 @@ strong {
 }
 
 .boss-omen-overlay span {
-  color: #ff9aa7;
+  color: var(--boss-omen-color, #ff314f);
   font-size: clamp(13px, 3.2vw, 18px);
   font-weight: 900;
 }
