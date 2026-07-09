@@ -11,6 +11,8 @@ const resultPanel = document.getElementById("resultPanel");
 const resultKicker = document.getElementById("resultKicker");
 const resultTitle = document.getElementById("resultTitle");
 const resultBody = document.getElementById("resultBody");
+const bossOmenOverlay = document.getElementById("bossOmenOverlay");
+const bossOmenTitle = document.getElementById("bossOmenTitle");
 const newRoundButton = document.getElementById("newRoundButton");
 const deepButton = document.getElementById("deepButton");
 const pullButton = document.getElementById("pullButton");
@@ -55,6 +57,7 @@ const state = {
   bossOmen: null,
   pullProgress: 0,
   roulette: null,
+  bossWheel: null,
   struggleChecks: [],
   result: null,
   time: 0,
@@ -492,10 +495,12 @@ function resetRound() {
   state.bossOmen = omenForBoss(state.roundBoss);
   state.pullProgress = 0;
   state.roulette = null;
+  state.bossWheel = null;
   state.struggleChecks = [];
   state.result = null;
   state.fish = makeFish();
   resultPanel.classList.add("hidden");
+  if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = state.balance < bet();
   pullButton.disabled = true;
   updateHud();
@@ -657,6 +662,10 @@ function triggerShark() {
 function updatePull(dt) {
   if (state.status !== "pulling") return;
 
+  updateBossWheel(dt);
+  if (state.status !== "pulling") return;
+  if (state.bossWheel) return;
+
   updateRoulette(dt);
   if (state.status !== "pulling") return;
   if (state.roulette) return;
@@ -736,6 +745,7 @@ function setupStruggleChecks(fish) {
 function maybeStartStruggle() {
   const fish = state.caughtFish;
   if (!fish || state.roulette) return;
+  if (fish.isBoss) return;
   const check = state.struggleChecks.find((item) => !item.done && state.depth <= item.depth);
   if (!check || state.depth <= 0.2) return;
 
@@ -767,6 +777,101 @@ function maybeStartStruggle() {
     resolved: false,
   };
   sound.roulette();
+}
+
+function bossOutcomeForAngle(angle) {
+  const value = normalizeAngle(angle);
+  return value > Math.PI && value < TAU ? "ESCAPE" : "DOUBLE";
+}
+
+function pickBossLanding(outcome) {
+  const margin = 0.16;
+  if (outcome === "ESCAPE") {
+    return Math.PI + margin + Math.random() * (Math.PI - margin * 2);
+  }
+  return margin + Math.random() * (Math.PI - margin * 2);
+}
+
+function maybeStartBossWheel() {
+  const fish = state.caughtFish;
+  if (!fish || !fish.isBoss || state.bossWheel) return;
+  const check = state.struggleChecks.find((item) => item.mode === "boss" && !item.done && state.depth <= item.depth);
+  if (!check || state.depth <= 0.2) return;
+
+  check.done = true;
+  const outcome = Math.random() < bossDoubleChance ? "DOUBLE" : "ESCAPE";
+  state.bossWheel = {
+    timer: 0,
+    duration: 1.18,
+    settleTimer: 0,
+    settleDuration: 0.82,
+    settled: false,
+    outcome,
+    checkIndex: check.index,
+    checkTotal: check.total,
+    finalPointerAngle: pickBossLanding(outcome),
+    startAngle: Math.random() * Math.PI * 2,
+    spins: 5 + Math.floor(Math.random() * 3),
+    resolved: false,
+  };
+  sound.roulette();
+}
+
+function updateBossWheel(dt) {
+  maybeStartBossWheel();
+  if (!state.bossWheel) return;
+
+  const wheel = state.bossWheel;
+
+  if (!wheel.settled) {
+    const previousTimer = wheel.timer;
+    wheel.timer = Math.min(wheel.duration, wheel.timer + dt);
+
+    if (wheel.timer < wheel.duration) {
+      if (Math.floor(wheel.timer * 18) !== Math.floor(previousTimer * 18)) {
+        sound.roulette();
+      }
+      return;
+    }
+
+    wheel.settled = true;
+    wheel.settleTimer = 0;
+    if (wheel.outcome === "ESCAPE") {
+      sound.escape();
+    } else {
+      sound.win();
+    }
+    return;
+  }
+
+  wheel.settleTimer += dt;
+  if (wheel.settleTimer < wheel.settleDuration) {
+    if (wheel.outcome !== "ESCAPE" && Math.floor(wheel.settleTimer * 5) !== Math.floor((wheel.settleTimer - dt) * 5)) {
+      sound.roulette();
+    }
+    return;
+  }
+
+  if (wheel.resolved) return;
+  wheel.resolved = true;
+
+  const visibleOutcome = bossOutcomeForAngle(wheel.finalPointerAngle);
+  if (visibleOutcome === "ESCAPE") {
+    const escapedName = state.caughtFish ? state.caughtFish.name : "Boss";
+    if (state.caughtFish) state.caughtFish.escaped = true;
+    state.caughtFish = null;
+    state.bossWheel = null;
+    showResult("BOSS ESCAPED", `${escapedName} Broke Free`, "The boss wheel landed on ESCAPE. Payout is $0.", true);
+    return;
+  }
+
+  if (state.caughtFish) {
+    state.caughtFish.valueMultiplier = (state.caughtFish.valueMultiplier || 1) * 2;
+    state.caughtFish.doubleFlash = 1.2;
+    state.bestCandidate = state.caughtFish;
+    addDoubleEffect(state.caughtFish);
+  }
+  state.bossWheel = null;
 }
 
 function updateRoulette(dt) {
@@ -815,19 +920,10 @@ function updateRoulette(dt) {
   });
 
   if (visibleOutcome === "ESCAPE") {
-    const escapedName = state.caughtFish ? state.caughtFish.name : "Fish";
-    const isBossEscape = roulette.mode === "boss";
     if (state.caughtFish) state.caughtFish.escaped = true;
     state.caughtFish = null;
     state.roulette = null;
-    showResult(
-      isBossEscape ? "BOSS ESCAPED" : "ESCAPED",
-      isBossEscape ? `${escapedName} Broke Free` : "Fish Broke Free",
-      isBossEscape
-        ? "The boss gamble landed on ESCAPE. Payout is $0."
-        : "The struggle wheel landed on ESCAPE. Payout is $0.",
-      true
-    );
+    showResult("ESCAPED", "Fish Broke Free", "The struggle wheel landed on ESCAPE. Payout is $0.", true);
     return;
   }
 
@@ -869,6 +965,7 @@ function showResult(kicker, title, body, canRestart) {
   resultTitle.textContent = title;
   resultBody.textContent = body;
   resultPanel.classList.remove("hidden");
+  if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.classList.remove("is-held");
   deepButton.disabled = true;
   pullButton.disabled = true;
@@ -1611,11 +1708,6 @@ function drawAbyssWhale(fish) {
 function drawRoulette() {
   const roulette = state.roulette;
   if (!roulette) return;
-  const isBossRoulette = roulette.mode === "boss";
-  if (isBossRoulette) {
-    drawBossRoulette(roulette);
-    return;
-  }
 
   const progress = Math.min(1, roulette.timer / roulette.duration);
   const easeOut = 1 - Math.pow(1 - progress, 3);
@@ -1791,10 +1883,7 @@ function drawBossRoulette(roulette) {
   drawRouletteLegendItem(58, radius + 38, "#f4c542", "DOUBLE");
 
   if (progress >= 1) {
-    const visibleOutcome = outcomeForRouletteAngle(roulette.finalPointerAngle, {
-      escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
-      double: { start: roulette.doubleStart, end: roulette.doubleEnd },
-    });
+    const visibleOutcome = bossOutcomeForAngle(roulette.finalPointerAngle);
     ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : "#ffd36a";
     ctx.font = "950 34px Trebuchet MS";
     ctx.fillText(visibleOutcome, 0, radius + 82);
@@ -1821,32 +1910,13 @@ function drawRouletteLegendItem(x, y, color, label) {
   ctx.restore();
 }
 
-function drawBossOmen() {
-  if (!state.bossOmen || state.depth < state.bossOmen.activeFrom || state.depth >= 82) return;
-
-  const pulse = 0.5 + Math.sin(state.time * 5.5) * 0.32;
-  const intensity = Math.max(0, Math.min(1, (state.depth - state.bossOmen.activeFrom) / 10));
-
-  ctx.save();
-  const gradient = ctx.createRadialGradient(W / 2, H + 80, 20, W / 2, H + 80, 430);
-  gradient.addColorStop(0, `rgba(255, 49, 79, ${0.48 * intensity + pulse * 0.16})`);
-  gradient.addColorStop(0.42, `rgba(255, 49, 79, ${0.24 * intensity})`);
-  gradient.addColorStop(1, "rgba(255, 49, 79, 0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, H - 430, W, 430);
-
-  ctx.strokeStyle = `rgba(255, 49, 79, ${0.4 + pulse * 0.8})`;
-  ctx.lineWidth = 7;
-  ctx.strokeRect(18, 18, W - 36, H - 36);
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = `rgba(255, 224, 190, ${0.72 + pulse * 0.28})`;
-  ctx.font = "950 30px Trebuchet MS";
-  ctx.fillText(state.bossOmen.text, W / 2, H - 270);
-  ctx.font = "900 18px Trebuchet MS";
-  ctx.fillStyle = `rgba(255, 125, 135, ${0.72 + pulse * 0.18})`;
-  ctx.fillText("WARNING: Boss target appears after 80F", W / 2, H - 238);
-  ctx.restore();
+function updateBossOmenOverlay() {
+  if (!bossOmenOverlay) return;
+  const isVisible = Boolean(state.bossOmen && state.depth >= state.bossOmen.activeFrom && state.depth < 82 && state.status !== "finished");
+  bossOmenOverlay.classList.toggle("hidden", !isVisible);
+  if (bossOmenTitle && state.bossOmen) {
+    bossOmenTitle.textContent = state.bossOmen.text;
+  }
 }
 
 function drawShark() {
@@ -1908,8 +1978,8 @@ function render() {
   drawShark();
   drawEffects();
   drawDepthShade(Math.min(1, state.depth / maxDepth));
-  drawBossOmen();
   drawRoulette();
+  if (state.bossWheel) drawBossRoulette(state.bossWheel);
 
   if (state.status === "ready") {
     ctx.save();
@@ -1936,6 +2006,7 @@ function frame(now) {
   updateEffects(dt);
   addBubbles(dt);
   updateHud();
+  updateBossOmenOverlay();
   updateMusic();
   render();
   requestAnimationFrame(frame);

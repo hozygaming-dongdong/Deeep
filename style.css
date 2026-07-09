@@ -269,6 +269,58 @@ strong {
   display: none;
 }
 
+.boss-omen-overlay {
+  position: absolute;
+  z-index: 7;
+  right: 22px;
+  bottom: 208px;
+  left: 22px;
+  display: grid;
+  gap: 4px;
+  padding: 15px 16px;
+  border: 3px solid rgba(255, 49, 79, 0.92);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 50% 120%, rgba(255, 49, 79, 0.52), transparent 64%),
+    rgba(34, 3, 12, 0.86);
+  color: #fff1d1;
+  text-align: center;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.52);
+  box-shadow:
+    0 0 34px rgba(255, 49, 79, 0.72),
+    inset 0 0 22px rgba(255, 49, 79, 0.28);
+  animation: bossOmenPulse 0.72s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.boss-omen-overlay.hidden {
+  display: none;
+}
+
+.boss-omen-overlay strong {
+  color: #fff6da;
+  font-size: clamp(20px, 5.2vw, 34px);
+  font-weight: 950;
+}
+
+.boss-omen-overlay span {
+  color: #ff9aa7;
+  font-size: clamp(13px, 3.2vw, 18px);
+  font-weight: 900;
+}
+
+@keyframes bossOmenPulse {
+  from {
+    opacity: 0.72;
+    transform: translateY(0) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-2px) scale(1);
+  }
+}
+
 .result-panel p {
   margin: 0;
   color: #c8ecff;
