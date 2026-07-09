@@ -611,12 +611,12 @@ function makeFish() {
 }
 
 function makeFakePlayers() {
-  const names = ["MIA", "KAI", "REX", "NOVA"];
-  const colors = ["#ff9aa7", "#8ff6ff", "#ffd36a", "#b86cff"];
+  const names = ["Seven", "Mad", "Hao", "CC", "Ivan", "Hank"];
+  const colors = ["#ff9aa7", "#8ff6ff", "#ffd36a", "#b86cff", "#78e6a3", "#ffb36a"];
   return names.map((name, index) => ({
     name,
     color: colors[index],
-    lane: 115 + index * 155 + Math.random() * 34 - 17,
+    lane: 78 + index * ((W - 156) / Math.max(1, names.length - 1)) + Math.random() * 24 - 12,
     depth: Math.random() * 12,
     targetDepth: 22 + Math.random() * 58,
     phase: Math.random() * Math.PI * 2,
