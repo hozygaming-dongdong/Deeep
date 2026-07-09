@@ -48,6 +48,7 @@ const state = {
   shark: null,
   caughtFish: null,
   bestCandidate: null,
+  roundBoss: null,
   bossOmen: null,
   pullProgress: 0,
   roulette: null,
@@ -79,11 +80,11 @@ const bossCatalog = {
     name: "Crimson Leviathan",
     mult: 110,
     minDepth: 80,
-    catchRate: 0.72,
+    catchRate: 0.82,
     holdRate: 1,
     color: "#b31328",
     accent: "#ffdf6d",
-    size: 138,
+    size: 188,
     rarity: 7,
     tag: "BOSS",
     isBoss: true,
@@ -434,20 +435,19 @@ function finalPrizeForDepth() {
   return options[Math.floor(Math.random() * options.length)];
 }
 
-function chooseBossOmen() {
-  if (Math.random() > 0.14) return null;
-  return {
-    type: "crimson",
-    color: "#ff314f",
-    text: "CRIMSON SIGNAL BELOW",
-    activeFrom: 40 + Math.random() * 10,
-  };
+function chooseRoundBoss() {
+  if (Math.random() > 0.1) return null;
+  return bossCatalog.crimson;
 }
 
-function bossForRound() {
-  if (!state.bossOmen) return null;
-  if (Math.random() > 0.72) return null;
-  return bossCatalog[state.bossOmen.type] || null;
+function omenForBoss(boss) {
+  if (!boss) return null;
+  return {
+    type: boss.bossType,
+    color: "#ff314f",
+    text: `${boss.name.toUpperCase()} BELOW`,
+    activeFrom: 40 + Math.random() * 10,
+  };
 }
 
 function makeFishInstance(item, index, depth, overrides = {}) {
@@ -483,7 +483,8 @@ function resetRound() {
   state.effects = [];
   state.caughtFish = null;
   state.bestCandidate = null;
-  state.bossOmen = chooseBossOmen();
+  state.roundBoss = chooseRoundBoss();
+  state.bossOmen = omenForBoss(state.roundBoss);
   state.pullProgress = 0;
   state.roulette = null;
   state.struggleChecks = [];
@@ -504,7 +505,7 @@ function makeFish() {
     fish.push(makeFishInstance(item, index, depth));
   }
 
-  const boss = bossForRound();
+  const boss = state.roundBoss;
   if (boss) {
     const bossDepth = 82 + Math.random() * 16;
     fish.push(makeFishInstance(boss, fish.length, bossDepth, {
@@ -1152,11 +1153,12 @@ function drawHook() {
 function drawFish(fish) {
   if (fish.escaped) return;
   const fishY = fish.hooked ? fish.y : yForDepth(fish.depth) + Math.sin(fish.phase) * 9;
-  if (!fish.hooked && (fishY < hookTop - 90 || fishY > H - 230)) return;
   if (fish.isBoss) {
+    if (!fish.hooked && (fishY < hookTop - fish.size || fishY > H - 160)) return;
     drawBossCatch(fish, fishY);
     return;
   }
+  if (!fish.hooked && (fishY < hookTop - 90 || fishY > H - 230)) return;
   if (fish.isSpecial) {
     drawSpecialCatch(fish, fishY);
     return;
@@ -1319,37 +1321,46 @@ function drawSpecialCatch(fish, fishY) {
 }
 
 function drawBossCatch(fish, fishY) {
-  const struggle = fish.hooked ? Math.sin(state.time * 28) * 18 : Math.sin(state.time * 2 + fish.phase) * 10;
-  const bob = Math.sin(state.time * 3 + fish.phase) * 7;
-  const pulse = 1 + Math.sin(state.time * 5 + fish.phase) * 0.045;
+  const struggle = fish.hooked ? Math.sin(state.time * 28) * 24 : Math.sin(state.time * 2 + fish.phase) * 16;
+  const bob = Math.sin(state.time * 3 + fish.phase) * 10;
+  const pulse = 1 + Math.sin(state.time * 5 + fish.phase) * 0.06;
   const isDoubled = (fish.valueMultiplier || 1) > 1;
 
   ctx.save();
   ctx.translate(fish.x + struggle, fishY + bob);
   ctx.scale(fish.dir * pulse, pulse);
 
-  const glow = 0.42 + Math.sin(state.time * 6) * 0.08;
+  const glow = 0.58 + Math.sin(state.time * 6) * 0.14;
   ctx.save();
   ctx.globalAlpha = glow;
   ctx.fillStyle = "#ff314f";
   ctx.beginPath();
-  ctx.ellipse(0, 0, fish.size * 1.7, fish.size * 0.88, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, fish.size * 2.05, fish.size * 1.02, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.42;
+  ctx.strokeStyle = "#ff6b7b";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, fish.size * 1.45, fish.size * 0.66, 0, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 
   ctx.fillStyle = fish.color;
   ctx.strokeStyle = "#4c0610";
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 8;
   ctx.beginPath();
-  ctx.ellipse(0, 0, fish.size * 1.18, fish.size * 0.45, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, fish.size * 1.28, fish.size * 0.5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = "#7d0718";
   ctx.beginPath();
-  ctx.moveTo(-fish.size * 1.05, 0);
-  ctx.lineTo(-fish.size * 1.72, -fish.size * 0.44);
-  ctx.lineTo(-fish.size * 1.55, fish.size * 0.48);
+  ctx.moveTo(-fish.size * 1.08, 0);
+  ctx.lineTo(-fish.size * 1.95, -fish.size * 0.52);
+  ctx.lineTo(-fish.size * 1.78, fish.size * 0.58);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -1399,11 +1410,11 @@ function drawBossCatch(fish, fishY) {
   ctx.scale(fish.dir, 1);
   ctx.textAlign = "center";
   ctx.fillStyle = "#ff6b7b";
-  ctx.font = "950 18px Trebuchet MS";
-  ctx.fillText("BOSS", 0, -fish.size * 0.72);
-  ctx.fillStyle = "#fff2c7";
   ctx.font = "950 28px Trebuchet MS";
-  ctx.fillText(fishValue(fish), 0, -fish.size * 0.5);
+  ctx.fillText("BOSS", 0, -fish.size * 0.78);
+  ctx.fillStyle = "#fff2c7";
+  ctx.font = "950 38px Trebuchet MS";
+  ctx.fillText(fishValue(fish), 0, -fish.size * 0.56);
   if (fish.hooked && isDoubled) {
     drawDoubleBadge(0, -fish.size * 0.92, fish.valueMultiplier || 2);
   }
