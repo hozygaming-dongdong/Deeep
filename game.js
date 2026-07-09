@@ -1,6 +1,7 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
+const balancePanel = document.getElementById("balancePanel");
 const balanceText = document.getElementById("balanceText");
 const depthText = document.getElementById("depthText");
 const riskText = document.getElementById("riskText");
@@ -637,6 +638,14 @@ function updateHud() {
   bestFishText.textContent = state.bestCandidate
     ? `${state.bestCandidate.name} ${fishValue(state.bestCandidate)}`
     : "-";
+}
+
+function refillBalanceForDev() {
+  state.balance = 10000;
+  if (state.status === "ready") {
+    deepButton.disabled = state.balance < bet();
+  }
+  updateHud();
 }
 
 function beginDive() {
@@ -2547,6 +2556,9 @@ window.addEventListener("blur", () => {
   if (state.isHolding) stopDive();
 });
 
+if (balancePanel) {
+  balancePanel.addEventListener("click", refillBalanceForDev);
+}
 pullButton.addEventListener("click", startPull);
 betDownButton.addEventListener("click", () => changeBet(-1));
 betUpButton.addEventListener("click", () => changeBet(1));

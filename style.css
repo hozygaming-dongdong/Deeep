@@ -100,6 +100,15 @@ canvas {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
+.balance-panel {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.balance-panel:hover {
+  border-color: rgba(255, 211, 106, 0.72);
+}
+
 .hud-top {
   top: 12px;
   right: 12px;
