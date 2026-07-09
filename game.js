@@ -71,6 +71,7 @@ const state = {
   roulette: null,
   bossWheel: null,
   struggleChecks: [],
+  pendingMysteryFish: null,
   result: null,
   time: 0,
 };
@@ -123,7 +124,7 @@ const bossCatalog = {
     bossType: "octopus",
   },
   mystery: {
-    name: "Golden Vault Beast",
+    name: "Golden Pearl Clam",
     mult: 100,
     minDepth: 80,
     catchRate: 0.82,
@@ -560,9 +561,11 @@ function resetRound() {
   state.roulette = null;
   state.bossWheel = null;
   state.struggleChecks = [];
+  state.pendingMysteryFish = null;
   state.result = null;
   state.fish = makeFish();
   resultPanel.classList.add("hidden");
+  newRoundButton.textContent = "NEW ROUND";
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = state.balance < bet();
   pullButton.disabled = true;
@@ -805,7 +808,16 @@ function struggleProfile(fish) {
 function setupStruggleChecks(fish) {
   if (fish.isBoss) {
     if (fish.bossType !== "crimson") {
-      state.struggleChecks = [];
+      const caughtDepth = Math.max(0.6, state.depth);
+      state.struggleChecks = [{
+        index: 1,
+        total: 1,
+        depth: Math.max(0.25, caughtDepth * 0.52),
+        escapeChance: 0.3,
+        doubleChance: 0.7,
+        mode: "boss",
+        done: false,
+      }];
       return;
     }
     const caughtDepth = Math.max(0.6, state.depth);
@@ -889,7 +901,7 @@ function maybeStartBossWheel() {
   if (!check || state.depth <= 0.2) return;
 
   check.done = true;
-  const outcome = Math.random() < bossDoubleChance ? "DOUBLE" : "ESCAPE";
+  const outcome = Math.random() < (check.doubleChance ?? bossDoubleChance) ? "DOUBLE" : "ESCAPE";
   state.bossWheel = {
     timer: 0,
     duration: 1.18,
@@ -897,6 +909,8 @@ function maybeStartBossWheel() {
     settleDuration: 0.82,
     settled: false,
     outcome,
+    escapeChance: check.escapeChance,
+    doubleChance: check.doubleChance,
     checkIndex: check.index,
     checkTotal: check.total,
     finalPointerAngle: pickBossLanding(outcome),
@@ -955,11 +969,14 @@ function updateBossWheel(dt) {
     return;
   }
 
-  if (state.caughtFish) {
+  if (state.caughtFish?.bossType === "crimson") {
     state.caughtFish.valueMultiplier = (state.caughtFish.valueMultiplier || 1) * 2;
     state.caughtFish.doubleFlash = 1.2;
     state.bestCandidate = state.caughtFish;
     addDoubleEffect(state.caughtFish);
+  } else if (state.caughtFish) {
+    state.caughtFish.safeFlash = 0.8;
+    state.bestCandidate = state.caughtFish;
   }
   state.bossWheel = null;
 }
@@ -1035,6 +1052,12 @@ function finishPull() {
   }
 
   const fish = state.caughtFish;
+  if (fish.bossType === "mystery" && !fish.mysteryOpened) {
+    state.pendingMysteryFish = fish;
+    showResult("BOSS LANDED", "Golden Pearl Clam", "Tap OPEN CLAM to reveal the pearl prize.", true, "OPEN CLAM");
+    return;
+  }
+
   const payout = payoutForCatch(fish);
   state.balance += payout;
   sound.win();
@@ -1078,7 +1101,25 @@ function mysteryPrizeMult() {
   return Math.round(6000 + Math.random() * 4000);
 }
 
-function showResult(kicker, title, body, canRestart) {
+function openMysteryClam() {
+  const fish = state.pendingMysteryFish;
+  if (!fish) return false;
+  fish.mysteryOpened = true;
+  fish.mysteryMult = mysteryPrizeMult();
+  const payout = payoutForCatch(fish);
+  state.balance += payout;
+  state.pendingMysteryFish = null;
+  sound.win();
+  showResult(
+    "PEARL OPENED",
+    `${fish.name} ${money(payout)}`,
+    resultBodyForCatch(fish, payout),
+    true
+  );
+  return true;
+}
+
+function showResult(kicker, title, body, canRestart, buttonText = "NEW ROUND") {
   state.status = "finished";
   state.isHolding = false;
   resultKicker.textContent = kicker;
@@ -1090,6 +1131,7 @@ function showResult(kicker, title, body, canRestart) {
   deepButton.disabled = true;
   pullButton.disabled = true;
   newRoundButton.disabled = !canRestart;
+  newRoundButton.textContent = buttonText;
   betDownButton.disabled = false;
   betUpButton.disabled = false;
   updateHud();
@@ -1751,7 +1793,7 @@ function drawMysteryBoss(fish, fishY) {
   const pulse = 1 + Math.sin(state.time * 6 + fish.phase) * 0.06;
   ctx.save();
   ctx.translate(fish.x + wobble, fishY + Math.sin(state.time * 3) * 8);
-  ctx.scale(fish.dir * pulse, pulse);
+  ctx.scale(pulse, pulse);
 
   ctx.save();
   ctx.globalAlpha = 0.62;
@@ -1761,42 +1803,38 @@ function drawMysteryBoss(fish, fishY) {
   ctx.fill();
   ctx.restore();
 
-  ctx.fillStyle = fish.color;
+  ctx.fillStyle = "#d89b22";
   ctx.strokeStyle = "#5e3308";
   ctx.lineWidth = 7;
   ctx.beginPath();
-  ctx.ellipse(0, 0, fish.size * 0.92, fish.size * 0.52, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, fish.size * 0.08, fish.size * 0.92, fish.size * 0.42, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#fff1a8";
-  ctx.strokeStyle = "#5e3308";
-  ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.moveTo(-fish.size * 0.72, 0);
-  ctx.lineTo(-fish.size * 1.28, -fish.size * 0.42);
-  ctx.lineTo(-fish.size * 1.16, fish.size * 0.44);
+  ctx.ellipse(0, -fish.size * 0.18, fish.size * 0.98, fish.size * 0.46, 0, Math.PI, 0);
+  ctx.quadraticCurveTo(fish.size * 0.55, fish.size * 0.1, 0, fish.size * 0.16);
+  ctx.quadraticCurveTo(-fish.size * 0.55, fish.size * 0.1, -fish.size * 0.98, -fish.size * 0.18);
   ctx.closePath();
+  ctx.fillStyle = "#f7c65b";
   ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = "#fff6da";
+  ctx.strokeStyle = "#fff1a8";
+  ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.arc(fish.size * 0.42, -fish.size * 0.12, fish.size * 0.16, 0, Math.PI * 2);
+  ctx.arc(0, -fish.size * 0.02, fish.size * 0.24, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#171004";
-  ctx.beginPath();
-  ctx.arc(fish.size * 0.46, -fish.size * 0.11, fish.size * 0.07, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.stroke();
 
-  ctx.scale(fish.dir, 1);
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff1a8";
   ctx.font = "950 28px Trebuchet MS";
-  ctx.fillText("MYSTERY", 0, -fish.size * 0.76);
+  ctx.fillText("PEARL CLAM", 0, -fish.size * 0.78);
   ctx.fillStyle = "#fff6da";
   ctx.font = "950 34px Trebuchet MS";
-  ctx.fillText(fish.mysteryMult ? `${Math.round(fish.mysteryMult)}X` : "100X-10000X", 0, -fish.size * 0.56);
+  ctx.fillText(fish.mysteryOpened ? `${Math.round(fish.mysteryMult)}X` : "TAP TO OPEN", 0, -fish.size * 0.58);
   ctx.restore();
 }
 
@@ -2080,6 +2118,8 @@ function drawBossRoulette(roulette) {
   const cy = 330;
   const radius = 108;
   const pulse = 0.5 + Math.sin(state.time * 8) * 0.18;
+  const isCrimson = state.caughtFish?.bossType === "crimson";
+  const safeLabel = isCrimson ? "DOUBLE" : "SAFE";
 
   ctx.save();
   ctx.globalAlpha = 0.96;
@@ -2097,7 +2137,7 @@ function drawBossRoulette(roulette) {
   ctx.fillText("BOSS GAMBLE", cx, cy - 116);
   ctx.font = "900 17px Trebuchet MS";
   ctx.fillStyle = "#ff9aa7";
-  ctx.fillText(`Round ${roulette.checkIndex}/${roulette.checkTotal} - DOUBLE or ESCAPE`, cx, cy - 88);
+  ctx.fillText(`Round ${roulette.checkIndex}/${roulette.checkTotal} - ${safeLabel} or ESCAPE`, cx, cy - 88);
 
   ctx.translate(cx, cy + 14);
 
@@ -2129,7 +2169,7 @@ function drawBossRoulette(roulette) {
   ctx.font = "950 25px Trebuchet MS";
   ctx.fillText("ESCAPE", 0, -42);
   ctx.fillStyle = "#3b230a";
-  ctx.fillText("DOUBLE", 0, 56);
+  ctx.fillText(safeLabel, 0, 56);
 
   ctx.save();
   ctx.rotate(pointerAngle);
@@ -2151,13 +2191,13 @@ function drawBossRoulette(roulette) {
   ctx.fill();
 
   drawRouletteLegendItem(-58, radius + 38, "#cf344a", "ESCAPE");
-  drawRouletteLegendItem(58, radius + 38, "#f4c542", "DOUBLE");
+  drawRouletteLegendItem(58, radius + 38, "#f4c542", safeLabel);
 
   if (progress >= 1) {
     const visibleOutcome = bossOutcomeForAngle(roulette.finalPointerAngle);
     ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : "#ffd36a";
     ctx.font = "950 34px Trebuchet MS";
-    ctx.fillText(visibleOutcome, 0, radius + 82);
+    ctx.fillText(visibleOutcome === "DOUBLE" ? safeLabel : visibleOutcome, 0, radius + 82);
   }
 
   ctx.restore();
@@ -2343,7 +2383,9 @@ window.addEventListener("blur", () => {
 pullButton.addEventListener("click", startPull);
 betDownButton.addEventListener("click", () => changeBet(-1));
 betUpButton.addEventListener("click", () => changeBet(1));
-newRoundButton.addEventListener("click", resetRound);
+newRoundButton.addEventListener("click", () => {
+  if (!openMysteryClam()) resetRound();
+});
 if (sharkToggle) {
   sharkToggle.addEventListener("change", () => {
     state.sharksEnabled = sharkToggle.checked;
