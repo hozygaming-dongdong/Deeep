@@ -21,6 +21,7 @@ const betUpButton = document.getElementById("betUpButton");
 const devToggleButton = document.getElementById("devToggleButton");
 const devControls = document.getElementById("devControls");
 const sharkToggle = document.getElementById("sharkToggle");
+const fakePlayersToggle = document.getElementById("fakePlayersToggle");
 const crimsonChanceSlider = document.getElementById("crimsonChanceSlider");
 const crimsonChanceText = document.getElementById("crimsonChanceText");
 const octopusChanceSlider = document.getElementById("octopusChanceSlider");
@@ -54,6 +55,7 @@ const state = {
   status: "ready",
   isHolding: false,
   sharksEnabled: true,
+  fakePlayersEnabled: true,
   lastTickDepth: 0,
   hookY: hookDiveY,
   messageTimer: 0,
@@ -73,6 +75,8 @@ const state = {
   struggleChecks: [],
   pendingMysteryFish: null,
   result: null,
+  fakePlayers: [],
+  fakeEvents: [],
   time: 0,
 };
 
@@ -546,6 +550,7 @@ function resetRound() {
   state.status = "ready";
   state.isHolding = false;
   state.sharksEnabled = sharkToggle ? sharkToggle.checked : state.sharksEnabled;
+  state.fakePlayersEnabled = fakePlayersToggle ? fakePlayersToggle.checked : state.fakePlayersEnabled;
   state.lastTickDepth = 0;
   state.hookY = hookDiveY;
   state.messageTimer = 0;
@@ -563,6 +568,8 @@ function resetRound() {
   state.struggleChecks = [];
   state.pendingMysteryFish = null;
   state.result = null;
+  state.fakePlayers = makeFakePlayers();
+  state.fakeEvents = [];
   state.fish = makeFish();
   resultPanel.classList.add("hidden");
   newRoundButton.textContent = "NEW ROUND";
@@ -601,6 +608,22 @@ function makeFish() {
   }));
 
   return fish;
+}
+
+function makeFakePlayers() {
+  const names = ["MIA", "KAI", "REX", "NOVA"];
+  const colors = ["#ff9aa7", "#8ff6ff", "#ffd36a", "#b86cff"];
+  return names.map((name, index) => ({
+    name,
+    color: colors[index],
+    lane: 115 + index * 155 + Math.random() * 34 - 17,
+    depth: Math.random() * 12,
+    targetDepth: 22 + Math.random() * 58,
+    phase: Math.random() * Math.PI * 2,
+    status: index % 2 === 0 ? "diving" : "idle",
+    timer: 0.6 + Math.random() * 3,
+    opacity: 0.36 + Math.random() * 0.18,
+  }));
 }
 
 function updateHud() {
@@ -1191,6 +1214,79 @@ function updateEffects(dt) {
   state.effects = state.effects.filter((effect) => effect.timer < effect.duration);
 }
 
+function updateFakePlayers(dt) {
+  if (!state.fakePlayersEnabled) {
+    state.fakeEvents = [];
+    return;
+  }
+
+  const pressure = state.bossOmenTriggered && state.depth < 88 ? 1.35 : 1;
+  for (const player of state.fakePlayers) {
+    player.timer -= dt;
+    player.phase += dt * 2;
+
+    if (player.status === "idle") {
+      if (player.timer <= 0) {
+        player.status = "diving";
+        player.targetDepth = Math.max(12, Math.min(maxDepth, state.depth + 18 + Math.random() * 34));
+        player.timer = 1.5 + Math.random() * 2.5;
+      }
+      continue;
+    }
+
+    if (player.status === "diving") {
+      player.depth = Math.min(player.targetDepth, player.depth + dt * (8 + Math.random() * 3) * pressure);
+      if (player.depth >= player.targetDepth - 0.5 || player.timer <= 0) {
+        player.status = "pulling";
+        player.timer = 1.4 + Math.random() * 2.2;
+        addFakeEvent(`${player.name} starts pulling at ${Math.floor(player.depth)}F`, player.color);
+      }
+      continue;
+    }
+
+    if (player.status === "pulling") {
+      player.depth = Math.max(0, player.depth - dt * (10 + Math.random() * 4));
+      if (player.depth <= 1 || player.timer <= 0) {
+        fakePlayerResult(player);
+        player.status = "idle";
+        player.timer = 1.8 + Math.random() * 4.4;
+        player.targetDepth = 18 + Math.random() * 62;
+      }
+    }
+  }
+
+  for (const event of state.fakeEvents) event.timer += dt;
+  state.fakeEvents = state.fakeEvents.filter((event) => event.timer < event.duration);
+}
+
+function fakePlayerResult(player) {
+  const bossHint = state.bossOmen && Math.random() < 0.35;
+  if (bossHint) {
+    addFakeEvent(`${player.name} rushes the ${state.bossOmen.type.toUpperCase()} signal`, player.color);
+    return;
+  }
+
+  const roll = Math.random();
+  if (roll < 0.22) {
+    addFakeEvent(`${player.name} lost the line`, player.color);
+  } else if (roll < 0.52) {
+    addFakeEvent(`${player.name} escaped at ${Math.floor(player.depth + Math.random() * 18)}F`, player.color);
+  } else {
+    const fakeWin = bet() * (6 + Math.floor(Math.random() * 90));
+    addFakeEvent(`${player.name} pulled ${money(fakeWin)}`, player.color);
+  }
+}
+
+function addFakeEvent(text, color) {
+  state.fakeEvents.unshift({
+    text,
+    color,
+    timer: 0,
+    duration: 2.6,
+  });
+  state.fakeEvents = state.fakeEvents.slice(0, 4);
+}
+
 function addBubbles(dt) {
   if (Math.random() < dt * 9) {
     state.bubbles.push({
@@ -1445,6 +1541,47 @@ function drawHook() {
   ctx.fill();
   ctx.stroke();
   ctx.restore();
+}
+
+function drawFakePlayers() {
+  if (!state.fakePlayersEnabled) return;
+  for (const player of state.fakePlayers) {
+    const y = yForDepth(player.depth);
+    if (y < hookTop - 110 || y > H - 190) continue;
+    const x = player.lane + Math.sin(state.time * 1.8 + player.phase) * 18;
+    const hookScale = 0.48;
+
+    ctx.save();
+    ctx.globalAlpha = player.opacity;
+    ctx.strokeStyle = player.color;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 12]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, y - 18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = player.color;
+    ctx.font = "900 16px Trebuchet MS";
+    ctx.textAlign = "center";
+    ctx.fillText(player.name, x, Math.max(36, y - 52));
+
+    ctx.translate(x, y);
+    ctx.scale(hookScale, hookScale);
+    ctx.strokeStyle = player.color;
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(0, -38);
+    ctx.quadraticCurveTo(-30, 8, -10, 48);
+    ctx.quadraticCurveTo(10, 72, 43, 38);
+    ctx.stroke();
+    ctx.fillStyle = player.color;
+    ctx.beginPath();
+    ctx.arc(0, -40, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 function drawFish(fish) {
@@ -2304,12 +2441,41 @@ function drawShark() {
   ctx.restore();
 }
 
+function drawFakeEvents() {
+  if (!state.fakePlayersEnabled || state.fakeEvents.length === 0) return;
+  ctx.save();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+
+  state.fakeEvents.forEach((event, index) => {
+    const progress = event.timer / event.duration;
+    const alpha = Math.max(0, Math.min(1, 1 - progress));
+    const y = 166 + index * 36 - progress * 8;
+    const x = 22;
+    ctx.globalAlpha = alpha * 0.86;
+    ctx.fillStyle = "rgba(5, 17, 27, 0.72)";
+    ctx.beginPath();
+    ctx.roundRect(x, y - 16, 286, 30, 8);
+    ctx.fill();
+    ctx.strokeStyle = event.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = event.color;
+    ctx.font = "900 13px Trebuchet MS";
+    ctx.fillText(event.text, x + 10, y);
+  });
+
+  ctx.restore();
+}
+
 function render() {
   drawBackground();
   for (const fish of state.fish) drawFish(fish);
+  drawFakePlayers();
   drawHook();
   drawShark();
   drawEffects();
+  drawFakeEvents();
   drawDepthShade(Math.min(1, state.depth / maxDepth));
   drawRoulette();
   if (state.bossWheel) drawBossRoulette(state.bossWheel);
@@ -2336,6 +2502,7 @@ function frame(now) {
   updatePull(dt);
   updateShark(dt);
   updateFish(dt);
+  updateFakePlayers(dt);
   updateEffects(dt);
   addBubbles(dt);
   updateHud();
@@ -2389,6 +2556,12 @@ newRoundButton.addEventListener("click", () => {
 if (sharkToggle) {
   sharkToggle.addEventListener("change", () => {
     state.sharksEnabled = sharkToggle.checked;
+  });
+}
+if (fakePlayersToggle) {
+  fakePlayersToggle.addEventListener("change", () => {
+    state.fakePlayersEnabled = fakePlayersToggle.checked;
+    if (!state.fakePlayersEnabled) state.fakeEvents = [];
   });
 }
 if (devToggleButton && devControls) {
