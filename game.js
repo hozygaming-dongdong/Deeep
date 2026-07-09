@@ -505,6 +505,10 @@ function beginDive() {
     betUpButton.disabled = true;
   }
   if (state.status === "diving") {
+    if (state.balance < bet()) {
+      pauseForNoBalance();
+      return;
+    }
     state.isHolding = true;
     deepButton.classList.add("is-held");
     sound.dive();
@@ -514,6 +518,13 @@ function beginDive() {
 function stopDive() {
   state.isHolding = false;
   deepButton.classList.remove("is-held");
+}
+
+function pauseForNoBalance() {
+  state.isHolding = false;
+  deepButton.classList.remove("is-held");
+  deepButton.disabled = true;
+  pullButton.disabled = state.depth <= 0;
 }
 
 function startPull() {
@@ -530,11 +541,21 @@ function startPull() {
 function sinkStep(dt) {
   if (!state.isHolding || state.status !== "diving") return;
 
+  if (state.balance < bet()) {
+    pauseForNoBalance();
+    return;
+  }
+
   const depthGain = dt * 7.1;
   state.depth = Math.min(maxDepth, state.depth + depthGain);
   state.hookY = yForDepth(state.depth);
 
   while (Math.floor(state.depth) > state.lastTickDepth) {
+    if (state.balance < bet()) {
+      pauseForNoBalance();
+      return;
+    }
+
     state.lastTickDepth += 1;
     state.spent += bet();
     state.balance -= bet();
@@ -547,10 +568,7 @@ function sinkStep(dt) {
     }
 
     if (state.balance < bet()) {
-      state.isHolding = false;
-      deepButton.classList.remove("is-held");
-      deepButton.disabled = true;
-      pullButton.disabled = false;
+      pauseForNoBalance();
       return;
     }
 
