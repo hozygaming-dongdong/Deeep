@@ -18,6 +18,8 @@ const deepButton = document.getElementById("deepButton");
 const pullButton = document.getElementById("pullButton");
 const betDownButton = document.getElementById("betDownButton");
 const betUpButton = document.getElementById("betUpButton");
+const devToggleButton = document.getElementById("devToggleButton");
+const devControls = document.getElementById("devControls");
 const sharkToggle = document.getElementById("sharkToggle");
 const crimsonChanceSlider = document.getElementById("crimsonChanceSlider");
 const crimsonChanceText = document.getElementById("crimsonChanceText");
@@ -2054,6 +2056,11 @@ newRoundButton.addEventListener("click", resetRound);
 if (sharkToggle) {
   sharkToggle.addEventListener("change", () => {
     state.sharksEnabled = sharkToggle.checked;
+  });
+}
+if (devToggleButton && devControls) {
+  devToggleButton.addEventListener("click", () => {
+    devControls.classList.toggle("hidden");
   });
 }
 if (crimsonChanceSlider) {

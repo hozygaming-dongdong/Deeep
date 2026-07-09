@@ -64,16 +64,19 @@
         </div>
 
         <div class="dev-panel">
-          <label class="dev-row">
-            <span>DEV</span>
-            <input id="sharkToggle" type="checkbox" checked />
-            <strong>SHARKS</strong>
-          </label>
-          <label class="dev-row dev-slider">
-            <span>CRIMSON</span>
-            <input id="crimsonChanceSlider" type="range" min="0" max="100" value="10" />
-            <strong id="crimsonChanceText">10%</strong>
-          </label>
+          <button id="devToggleButton" class="dev-toggle" type="button">DEV</button>
+          <div id="devControls" class="dev-controls hidden">
+            <label class="dev-row">
+              <span>DEV</span>
+              <input id="sharkToggle" type="checkbox" checked />
+              <strong>SHARKS</strong>
+            </label>
+            <label class="dev-row dev-slider">
+              <span>CRIMSON</span>
+              <input id="crimsonChanceSlider" type="range" min="0" max="100" value="30" />
+              <strong id="crimsonChanceText">30%</strong>
+            </label>
+          </div>
         </div>
       </section>
     </main>
