@@ -2637,7 +2637,7 @@ function drawRoulette() {
   ctx.fillStyle = "#a9d8eb";
   ctx.fillText(
     roulette.mode === "golden"
-      ? "Safe 50% / Double 50%"
+      ? "Nope 50% / Double 50%"
       : `Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`,
     cx,
     cy - 76
@@ -2698,11 +2698,11 @@ function drawRoulette() {
 
   if (roulette.mode === "golden") {
     drawRouletteLegendItem(-45, radius + 35, "#f4c542", "DOUBLE");
-    drawRouletteLegendItem(45, radius + 35, "#2aa866", "SAFE");
+    drawRouletteLegendItem(45, radius + 35, "#2aa866", "NOPE");
   } else {
     drawRouletteLegendItem(-82, radius + 35, "#cf344a", "ESCAPE");
     drawRouletteLegendItem(0, radius + 35, "#f4c542", "DOUBLE");
-    drawRouletteLegendItem(82, radius + 35, "#2aa866", "SAFE");
+    drawRouletteLegendItem(82, radius + 35, "#2aa866", "NOPE");
   }
 
   if (progress >= 1) {
@@ -2714,7 +2714,7 @@ function drawRoulette() {
       });
     ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : visibleOutcome === "DOUBLE" ? "#ffd36a" : "#78e6a3";
     ctx.font = "950 30px Trebuchet MS";
-    ctx.fillText(visibleOutcome, 0, radius + 78);
+    ctx.fillText(visibleOutcome === "SAFE" ? "NOPE" : visibleOutcome, 0, radius + 78);
   }
 
   ctx.restore();
@@ -2730,7 +2730,7 @@ function drawBossRoulette(roulette) {
   const radius = 108;
   const pulse = 0.5 + Math.sin(state.time * 8) * 0.18;
   const isCrimson = state.caughtFish?.bossType === "crimson";
-  const safeLabel = isCrimson ? "DOUBLE" : "SAFE";
+  const safeLabel = isCrimson ? "DOUBLE" : "NOPE";
 
   ctx.save();
   ctx.globalAlpha = 0.96;
