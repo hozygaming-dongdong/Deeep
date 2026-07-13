@@ -585,7 +585,7 @@ function resetRound() {
 function makeFish() {
   const fish = [];
 
-  for (let depth = 1.2; depth < maxDepth; depth += 3.8 + Math.random() * 3.2) {
+  for (let depth = 1.2; depth < maxDepth; depth += 2.1 + Math.random() * 1.8) {
     const item = specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
     fish.push(makeFishInstance(item, index, depth));
@@ -805,15 +805,15 @@ function updatePull(dt) {
 
 function makePullRocks(startDepth) {
   const rocks = [];
-  for (let depth = Math.max(8, startDepth - 8); depth > 4; depth -= 10 + Math.random() * 8) {
+  for (let depth = Math.max(8, startDepth - 8); depth > 4; depth -= 7 + Math.random() * 5) {
     rocks.push({
       depth,
       x: 110 + Math.random() * (W - 220),
       y: yForDepth(depth),
-      w: 92 + Math.random() * 66,
-      h: 28 + Math.random() * 16,
+      w: 124 + Math.random() * 82,
+      h: 38 + Math.random() * 22,
       dir: Math.random() < 0.5 ? 1 : -1,
-      speed: 65 + Math.random() * 78,
+      speed: 135 + Math.random() * 120,
       cooldown: 0,
       phase: Math.random() * Math.PI * 2,
     });
@@ -1221,8 +1221,8 @@ function updateFish(dt) {
   for (const fish of state.fish) {
     if (fish.doubleFlash) fish.doubleFlash = Math.max(0, fish.doubleFlash - dt);
     if (fish.hooked) continue;
-    fish.phase += dt * 4.2;
-    fish.x += fish.speed * fish.dir * dt * 118;
+    fish.phase += dt * 5.6;
+    fish.x += fish.speed * fish.dir * dt * 175;
 
     if (fish.x < 68) fish.dir = 1;
     if (fish.x > W - 68) fish.dir = -1;
@@ -1560,9 +1560,9 @@ function drawPullRocks() {
     if (rock.y < hookTop - 80 || rock.y > H - 160) continue;
     ctx.save();
     ctx.translate(rock.x, rock.y + Math.sin(state.time * 3 + rock.phase) * 4);
-    ctx.fillStyle = rock.cooldown > 0 ? "rgba(255, 89, 102, 0.78)" : "rgba(67, 76, 86, 0.88)";
-    ctx.strokeStyle = "rgba(8, 18, 31, 0.82)";
-    ctx.lineWidth = 4;
+    ctx.fillStyle = rock.cooldown > 0 ? "rgba(255, 89, 102, 0.88)" : "rgba(90, 105, 118, 0.94)";
+    ctx.strokeStyle = rock.cooldown > 0 ? "#ffd36a" : "rgba(255, 231, 154, 0.82)";
+    ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo(-rock.w * 0.5, rock.h * 0.2);
     ctx.lineTo(-rock.w * 0.32, -rock.h * 0.55);
@@ -1574,6 +1574,21 @@ function drawPullRocks() {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+
+    ctx.globalAlpha = 0.72;
+    ctx.strokeStyle = "#182938";
+    ctx.lineWidth = 3;
+    for (let x = -rock.w * 0.32; x <= rock.w * 0.36; x += 28) {
+      ctx.beginPath();
+      ctx.moveTo(x - 16, -rock.h * 0.36);
+      ctx.lineTo(x + 14, rock.h * 0.34);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#fff1a8";
+    ctx.font = "950 13px Trebuchet MS";
+    ctx.textAlign = "center";
+    ctx.fillText("ROCK", 0, -rock.h * 0.72);
     ctx.restore();
   }
 }
