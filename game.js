@@ -48,7 +48,7 @@ const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
 const nopeColor = "#9aa3ad";
-const fishPayoutBoost = 1.5;
+const fishPayoutBoost = 0.75;
 const goldenBubbleHitScale = 2;
 let audioCtx = null;
 let music = null;
@@ -639,7 +639,7 @@ function makeFish() {
 
 function makeGoldenBubbles() {
   const bubbles = [];
-  for (let depth = 14; depth < maxDepth - 4; depth += 26 + Math.random() * 14) {
+  for (let depth = 14; depth < maxDepth - 4; depth += 32 + Math.random() * 18) {
     const x = 90 + Math.random() * (W - 180);
     bubbles.push({
       depth,
@@ -1938,9 +1938,20 @@ function drawPullRocks() {
     if (rock.y < hookTop - 80 || rock.y > H - 160) continue;
     ctx.save();
     ctx.translate(rock.x, rock.y + Math.sin(state.time * 3 + rock.phase) * 4);
-    ctx.fillStyle = rock.cooldown > 0 ? "rgba(255, 89, 102, 0.88)" : "rgba(90, 105, 118, 0.94)";
-    ctx.strokeStyle = rock.cooldown > 0 ? "#ffd36a" : "rgba(255, 231, 154, 0.82)";
-    ctx.lineWidth = 6;
+    const dangerPulse = 0.55 + Math.sin(state.time * 7 + rock.phase) * 0.18;
+    ctx.save();
+    ctx.globalAlpha = rock.cooldown > 0 ? 0.8 : dangerPulse;
+    ctx.shadowColor = "#ff314f";
+    ctx.shadowBlur = rock.cooldown > 0 ? 24 : 18;
+    ctx.fillStyle = "rgba(255, 49, 79, 0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rock.w * 0.82, rock.h * 1.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = rock.cooldown > 0 ? "rgba(255, 89, 102, 0.9)" : "rgba(82, 88, 96, 0.96)";
+    ctx.strokeStyle = rock.cooldown > 0 ? "#ffd36a" : "#ff314f";
+    ctx.lineWidth = rock.cooldown > 0 ? 6 : 5;
     ctx.beginPath();
     ctx.moveTo(-rock.w * 0.5, rock.h * 0.2);
     ctx.lineTo(-rock.w * 0.32, -rock.h * 0.55);
@@ -1954,7 +1965,7 @@ function drawPullRocks() {
     ctx.stroke();
 
     ctx.globalAlpha = 0.72;
-    ctx.strokeStyle = "#182938";
+    ctx.strokeStyle = rock.cooldown > 0 ? "#5b1119" : "rgba(255, 89, 102, 0.72)";
     ctx.lineWidth = 3;
     for (let x = -rock.w * 0.32; x <= rock.w * 0.36; x += 28) {
       ctx.beginPath();
@@ -1963,7 +1974,7 @@ function drawPullRocks() {
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = "#fff1a8";
+    ctx.fillStyle = rock.cooldown > 0 ? "#fff1a8" : "#ffd1d6";
     ctx.font = "950 13px Trebuchet MS";
     ctx.textAlign = "center";
     ctx.fillText("ROCK", 0, -rock.h * 0.72);
