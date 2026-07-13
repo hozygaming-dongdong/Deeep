@@ -46,6 +46,7 @@ const defaultMysteryChance = 0.06;
 const musicVolumeBoost = 1.8;
 const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
+const hookCatchRadius = 38;
 let audioCtx = null;
 let music = null;
 
@@ -65,6 +66,7 @@ const state = {
   effects: [],
   fish: [],
   rocks: [],
+  goldenBubbles: [],
   shark: null,
   caughtFish: null,
   bestCandidate: null,
@@ -565,6 +567,7 @@ function resetRound() {
   state.shark = null;
   state.effects = [];
   state.rocks = [];
+  state.goldenBubbles = [];
   state.caughtFish = [];
   state.bestCandidate = null;
   state.roundBoss = null;
@@ -585,6 +588,7 @@ function resetRound() {
   state.fakePlayers = makeFakePlayers();
   state.fakeEvents = [];
   state.fish = makeFish();
+  state.goldenBubbles = makeGoldenBubbles();
   resultPanel.classList.add("hidden");
   newRoundButton.textContent = "NEW ROUND";
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
@@ -622,6 +626,20 @@ function makeFish() {
   }));
 
   return fish;
+}
+
+function makeGoldenBubbles() {
+  const bubbles = [];
+  for (let depth = 12; depth < maxDepth - 4; depth += 18 + Math.random() * 10) {
+    bubbles.push({
+      depth,
+      x: 90 + Math.random() * (W - 180),
+      r: 24 + Math.random() * 8,
+      phase: Math.random() * Math.PI * 2,
+      triggered: false,
+    });
+  }
+  return bubbles;
 }
 
 function makeFakePlayers() {
@@ -803,10 +821,19 @@ function sinkStep(dt) {
     }
 
     if (state.lastTickDepth >= maxDepth) {
-      startPull();
+      pauseAtBottom();
       return;
     }
   }
+}
+
+function pauseAtBottom() {
+  state.depth = maxDepth;
+  state.hookY = yForDepth(state.depth);
+  state.isHolding = false;
+  deepButton.classList.remove("is-held");
+  deepButton.disabled = true;
+  pullButton.disabled = false;
 }
 
 function triggerShark() {
@@ -845,6 +872,7 @@ function updatePullShuffle(dt) {
 
 function updatePull(dt) {
   if (state.status !== "pulling") return;
+  if (state.roulette) return;
 
   const pullSpeed = 6.2;
   const previousDepth = state.depth;
@@ -859,7 +887,7 @@ function updatePull(dt) {
 
     const fishY = yForDepth(fish.depth);
     const distance = Math.hypot(fish.x - W / 2, fishY - hookDiveY);
-    if (distance <= 55) {
+    if (distance <= hookCatchRadius) {
       fish.hooked = true;
       fish.chainIndex = state.caughtFish.length;
       state.caughtFish.push(fish);
@@ -868,12 +896,56 @@ function updatePull(dt) {
     }
   }
 
+  maybeTriggerGoldenBubble(previousDepth);
   updateCaughtFishChain(dt);
   checkRockHits();
 
   if (state.depth <= 0) {
     finishPull();
   }
+}
+
+function maybeTriggerGoldenBubble(previousDepth) {
+  if (state.roulette) return;
+  for (const bubble of state.goldenBubbles) {
+    if (bubble.triggered) continue;
+    if (bubble.depth < state.depth || bubble.depth > previousDepth) continue;
+
+    const bubbleY = yForDepth(bubble.depth);
+    const distance = Math.hypot(bubble.x - W / 2, bubbleY - hookDiveY);
+    if (distance <= hookCatchRadius + bubble.r) {
+      bubble.triggered = true;
+      startGoldenBubbleRoulette();
+      return;
+    }
+  }
+}
+
+function startGoldenBubbleRoulette() {
+  const outcome = Math.random() < 0.5 ? "DOUBLE" : "SAFE";
+  state.roulette = {
+    timer: 0,
+    duration: 0.95,
+    settleTimer: 0,
+    settleDuration: 0.55,
+    settled: false,
+    outcome,
+    mode: "golden",
+    doubleChance: 0.5,
+    finalPointerAngle: pickGoldenBubbleLanding(outcome),
+    startAngle: Math.random() * Math.PI * 2,
+    spins: 4 + Math.floor(Math.random() * 3),
+    resolved: false,
+  };
+  sound.roulette();
+}
+
+function pickGoldenBubbleLanding(outcome) {
+  const margin = 0.16;
+  if (outcome === "DOUBLE") {
+    return margin + Math.random() * (Math.PI - margin * 2);
+  }
+  return Math.PI + margin + Math.random() * (Math.PI - margin * 2);
 }
 
 function makePullRocks(startDepth) {
@@ -1124,7 +1196,6 @@ function updateBossWheel(dt) {
 }
 
 function updateRoulette(dt) {
-  maybeStartStruggle();
   if (!state.roulette) return;
 
   const roulette = state.roulette;
@@ -1162,6 +1233,21 @@ function updateRoulette(dt) {
 
   if (roulette.resolved) return;
   roulette.resolved = true;
+
+  if (roulette.mode === "golden") {
+    if (roulette.outcome === "DOUBLE") {
+      for (const fish of state.caughtFish) {
+        fish.valueMultiplier = (fish.valueMultiplier || 1) * 2;
+        fish.doubleFlash = 1.2;
+      }
+      if (state.caughtFish.length) {
+        state.bestCandidate = state.caughtFish[state.caughtFish.length - 1];
+        addDoubleEffect(state.bestCandidate);
+      }
+    }
+    state.roulette = null;
+    return;
+  }
 
   const visibleOutcome = outcomeForRouletteAngle(roulette.finalPointerAngle, {
     escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
@@ -1205,7 +1291,7 @@ function finishPull() {
 }
 
 function caughtFishPayout() {
-  return state.caughtFish.reduce((total, fish) => total + bet() * fish.mult, 0);
+  return state.caughtFish.reduce((total, fish) => total + bet() * fish.mult * (fish.valueMultiplier || 1), 0);
 }
 
 function payoutForCatch(fish) {
@@ -1725,6 +1811,42 @@ function drawBubbles() {
   ctx.restore();
 }
 
+function drawGoldenBubbles() {
+  ctx.save();
+  for (const bubble of state.goldenBubbles) {
+    if (bubble.triggered) continue;
+    const y = yForDepth(bubble.depth);
+    if (y < hookTop - 80 || y > H - 130) continue;
+    const pulse = 1 + Math.sin(state.time * 4.2 + bubble.phase) * 0.08;
+    const r = bubble.r * pulse;
+
+    ctx.globalAlpha = 0.85;
+    const glow = ctx.createRadialGradient(bubble.x, y, r * 0.15, bubble.x, y, r * 2.0);
+    glow.addColorStop(0, "rgba(255, 246, 170, 0.92)");
+    glow.addColorStop(0.45, "rgba(255, 211, 106, 0.42)");
+    glow.addColorStop(1, "rgba(255, 211, 106, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(bubble.x, y, r * 2.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha = 0.96;
+    ctx.fillStyle = "rgba(255, 217, 88, 0.28)";
+    ctx.strokeStyle = "#fff0a8";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(bubble.x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+    ctx.beginPath();
+    ctx.arc(bubble.x - r * 0.28, y - r * 0.34, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawHook() {
   const shake = state.hookShakeTimer > 0
     ? Math.sin(state.time * 105) * 18 * Math.min(1, state.hookShakeTimer / pullShakeDuration)
@@ -1737,13 +1859,13 @@ function drawHook() {
     ctx.globalAlpha = 0.18;
     ctx.fillStyle = "#ffd36a";
     ctx.beginPath();
-    ctx.arc(x, hookDiveY, 55, 0, Math.PI * 2);
+    ctx.arc(x, hookDiveY, hookCatchRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 0.65;
     ctx.strokeStyle = "#ffd36a";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(x, hookDiveY, 55, 0, Math.PI * 2);
+    ctx.arc(x, hookDiveY, hookCatchRadius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -2424,10 +2546,16 @@ function drawRoulette() {
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff6da";
   ctx.font = "900 24px Trebuchet MS";
-  ctx.fillText("STRUGGLE CHECK", cx, cy - 100);
+  ctx.fillText(roulette.mode === "golden" ? "GOLDEN BUBBLE" : "STRUGGLE CHECK", cx, cy - 100);
   ctx.font = "800 16px Trebuchet MS";
   ctx.fillStyle = "#a9d8eb";
-  ctx.fillText(`Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`, cx, cy - 76);
+  ctx.fillText(
+    roulette.mode === "golden"
+      ? "Safe 50% / Double 50%"
+      : `Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`,
+    cx,
+    cy - 76
+  );
 
   ctx.translate(cx, cy + 10);
 
@@ -2438,16 +2566,21 @@ function drawRoulette() {
   ctx.fillStyle = "#2aa866";
   ctx.fill();
 
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.arc(0, 0, radius, roulette.escapeStart, roulette.escapeEnd);
-  ctx.closePath();
-  ctx.fillStyle = "#cf344a";
-  ctx.fill();
+  const doubleStart = roulette.mode === "golden" ? 0 : roulette.doubleStart;
+  const doubleEnd = roulette.mode === "golden" ? Math.PI : roulette.doubleEnd;
+
+  if (roulette.mode !== "golden") {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, radius, roulette.escapeStart, roulette.escapeEnd);
+    ctx.closePath();
+    ctx.fillStyle = "#cf344a";
+    ctx.fill();
+  }
 
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.arc(0, 0, radius, roulette.doubleStart, roulette.doubleEnd);
+  ctx.arc(0, 0, radius, doubleStart, doubleEnd);
   ctx.closePath();
   ctx.fillStyle = "#f4c542";
   ctx.fill();
@@ -2477,15 +2610,22 @@ function drawRoulette() {
   ctx.arc(0, 0, 14, 0, Math.PI * 2);
   ctx.fill();
 
-  drawRouletteLegendItem(-82, radius + 35, "#cf344a", "ESCAPE");
-  drawRouletteLegendItem(0, radius + 35, "#f4c542", "DOUBLE");
-  drawRouletteLegendItem(82, radius + 35, "#2aa866", "SAFE");
+  if (roulette.mode === "golden") {
+    drawRouletteLegendItem(-45, radius + 35, "#f4c542", "DOUBLE");
+    drawRouletteLegendItem(45, radius + 35, "#2aa866", "SAFE");
+  } else {
+    drawRouletteLegendItem(-82, radius + 35, "#cf344a", "ESCAPE");
+    drawRouletteLegendItem(0, radius + 35, "#f4c542", "DOUBLE");
+    drawRouletteLegendItem(82, radius + 35, "#2aa866", "SAFE");
+  }
 
   if (progress >= 1) {
-    const visibleOutcome = outcomeForRouletteAngle(roulette.finalPointerAngle, {
-      escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
-      double: { start: roulette.doubleStart, end: roulette.doubleEnd },
-    });
+    const visibleOutcome = roulette.mode === "golden"
+      ? roulette.outcome
+      : outcomeForRouletteAngle(roulette.finalPointerAngle, {
+        escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
+        double: { start: roulette.doubleStart, end: roulette.doubleEnd },
+      });
     ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : visibleOutcome === "DOUBLE" ? "#ffd36a" : "#78e6a3";
     ctx.font = "950 30px Trebuchet MS";
     ctx.fillText(visibleOutcome, 0, radius + 78);
@@ -2718,6 +2858,7 @@ function drawFakeEvents() {
 
 function render() {
   drawBackground();
+  drawGoldenBubbles();
   for (const fish of state.fish) drawFish(fish);
   drawFakePlayers();
   drawPullRocks();
@@ -2749,6 +2890,7 @@ function frame(now) {
 
   sinkStep(dt);
   updatePullShuffle(dt);
+  updateRoulette(dt);
   updatePull(dt);
   updateShark(dt);
   updateFish(dt);
