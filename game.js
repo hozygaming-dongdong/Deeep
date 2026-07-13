@@ -45,6 +45,7 @@ const defaultOctopusChance = 0.08;
 const defaultMysteryChance = 0.06;
 const musicVolumeBoost = 1.8;
 const sfxVolumeBoost = 2.4;
+const pullShakeDuration = 0.32;
 let audioCtx = null;
 let music = null;
 
@@ -55,7 +56,7 @@ const state = {
   spent: 0,
   status: "ready",
   isHolding: false,
-  sharksEnabled: true,
+  sharksEnabled: false,
   fakePlayersEnabled: false,
   lastTickDepth: 0,
   hookY: hookDiveY,
@@ -73,6 +74,7 @@ const state = {
   bossOmenTimer: 0,
   pullProgress: 0,
   pullStartDepth: 0,
+  pullWindupTimer: 0,
   pullShuffleTimer: 0,
   pullSurgeTimer: 0,
   hookShakeTimer: 0,
@@ -571,6 +573,7 @@ function resetRound() {
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
   state.pullStartDepth = 0;
+  state.pullWindupTimer = 0;
   state.pullShuffleTimer = 0;
   state.pullSurgeTimer = 0;
   state.hookShakeTimer = 0;
@@ -716,9 +719,10 @@ function startPull() {
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
   state.pullStartDepth = state.depth;
-  state.pullShuffleTimer = triggerPullSurge();
-  state.pullSurgeTimer = state.pullShuffleTimer;
-  state.hookShakeTimer = state.pullShuffleTimer;
+  state.pullWindupTimer = pullShakeDuration;
+  state.pullShuffleTimer = 0;
+  state.pullSurgeTimer = 0;
+  state.hookShakeTimer = pullShakeDuration;
   state.rocks = [];
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = true;
@@ -751,6 +755,7 @@ function triggerPullSurge() {
 
 function finishPullShuffle() {
   state.status = "pulling";
+  state.pullWindupTimer = 0;
   state.pullShuffleTimer = 0;
   state.pullSurgeTimer = 0;
   state.hookShakeTimer = 0;
@@ -821,8 +826,18 @@ function triggerShark() {
 
 function updatePullShuffle(dt) {
   if (state.status !== "shuffle") return;
-  state.pullShuffleTimer = Math.max(0, state.pullShuffleTimer - dt);
   state.hookY = yForDepth(state.depth);
+
+  if (state.pullWindupTimer > 0) {
+    state.pullWindupTimer = Math.max(0, state.pullWindupTimer - dt);
+    if (state.pullWindupTimer <= 0) {
+      state.pullShuffleTimer = triggerPullSurge();
+      state.pullSurgeTimer = state.pullShuffleTimer;
+    }
+    return;
+  }
+
+  state.pullShuffleTimer = Math.max(0, state.pullShuffleTimer - dt);
   if (state.pullShuffleTimer <= 0) {
     finishPullShuffle();
   }
@@ -1712,7 +1727,7 @@ function drawBubbles() {
 
 function drawHook() {
   const shake = state.hookShakeTimer > 0
-    ? Math.sin(state.time * 105) * 18 * Math.min(1, state.hookShakeTimer / 0.7)
+    ? Math.sin(state.time * 105) * 18 * Math.min(1, state.hookShakeTimer / pullShakeDuration)
     : 0;
   const x = W / 2 + shake;
   const y = state.hookY;
