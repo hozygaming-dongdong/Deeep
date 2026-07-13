@@ -72,6 +72,9 @@ const state = {
   bossOmenTriggered: false,
   bossOmenTimer: 0,
   pullProgress: 0,
+  pullStartDepth: 0,
+  pullSurgeTimer: 0,
+  hookShakeTimer: 0,
   roulette: null,
   bossWheel: null,
   struggleChecks: [],
@@ -566,6 +569,9 @@ function resetRound() {
   state.bossOmenTriggered = false;
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
+  state.pullStartDepth = 0;
+  state.pullSurgeTimer = 0;
+  state.hookShakeTimer = 0;
   state.roulette = null;
   state.bossWheel = null;
   state.struggleChecks = [];
@@ -707,11 +713,31 @@ function startPull() {
   state.isHolding = false;
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
+  state.pullStartDepth = state.depth;
+  state.pullSurgeTimer = 0.85;
+  state.hookShakeTimer = 0.55;
+  triggerPullSurge();
   state.rocks = makePullRocks(state.depth);
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = true;
   pullButton.disabled = true;
   sound.pull();
+}
+
+function triggerPullSurge() {
+  for (const fish of state.fish) {
+    if (fish.hooked || fish.escaped || fish.depth > state.pullStartDepth) continue;
+    fish.dir = Math.random() < 0.5 ? 1 : -1;
+    fish.surgeKick = 1.4 + Math.random() * 2.2;
+    fish.phase = Math.random() * Math.PI * 2;
+  }
+  state.effects.push({
+    type: "pull-surge",
+    x: W / 2,
+    y: hookDiveY,
+    timer: 0,
+    duration: 0.65,
+  });
 }
 
 function sinkStep(dt) {
@@ -1218,15 +1244,21 @@ function updateShark(dt) {
 }
 
 function updateFish(dt) {
+  const surgeActive = state.status === "pulling" && state.pullSurgeTimer > 0;
   for (const fish of state.fish) {
     if (fish.doubleFlash) fish.doubleFlash = Math.max(0, fish.doubleFlash - dt);
     if (fish.hooked) continue;
-    fish.phase += dt * 5.6;
-    fish.x += fish.speed * fish.dir * dt * 350;
+    const isSurging = surgeActive && fish.depth <= state.pullStartDepth;
+    const surgeBoost = isSurging ? 3.2 + (fish.surgeKick || 1) : 1;
+    if (isSurging && Math.random() < dt * 9) fish.dir *= -1;
+    fish.phase += dt * (isSurging ? 13 : 5.6);
+    fish.x += fish.speed * fish.dir * dt * 350 * surgeBoost;
 
     if (fish.x < 68) fish.dir = 1;
     if (fish.x > W - 68) fish.dir = -1;
   }
+  state.pullSurgeTimer = Math.max(0, state.pullSurgeTimer - dt);
+  state.hookShakeTimer = Math.max(0, state.hookShakeTimer - dt);
 }
 
 function addDoubleEffect(fish) {
@@ -1419,6 +1451,28 @@ function drawDepthShade(depthRatio) {
 
 function drawEffects() {
   for (const effect of state.effects) {
+    if (effect.type === "pull-surge") {
+      const progress = Math.min(1, effect.timer / effect.duration);
+      const alpha = 1 - progress;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.78;
+      ctx.strokeStyle = "#c9f6ff";
+      ctx.lineWidth = 8 * alpha + 2;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, 42 + progress * 240, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = "#fff6da";
+      ctx.strokeStyle = "#0b527c";
+      ctx.lineWidth = 4;
+      ctx.font = "950 30px Trebuchet MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.strokeText("CURRENT SHIFT", effect.x, effect.y - 92 - progress * 28);
+      ctx.fillText("CURRENT SHIFT", effect.x, effect.y - 92 - progress * 28);
+      ctx.restore();
+      continue;
+    }
     if (effect.type === "rock-hit") {
       const progress = Math.min(1, effect.timer / effect.duration);
       const alpha = 1 - progress;
@@ -1607,7 +1661,10 @@ function drawBubbles() {
 }
 
 function drawHook() {
-  const x = W / 2;
+  const shake = state.hookShakeTimer > 0
+    ? Math.sin(state.time * 90) * 10 * (state.hookShakeTimer / 0.55)
+    : 0;
+  const x = W / 2 + shake;
   const y = state.hookY;
   ctx.save();
 
