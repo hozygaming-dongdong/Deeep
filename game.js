@@ -714,8 +714,8 @@ function startPull() {
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
   state.pullStartDepth = state.depth;
-  state.pullSurgeTimer = 0.85;
-  state.hookShakeTimer = 0.55;
+  state.pullSurgeTimer = 0.9;
+  state.hookShakeTimer = 0.7;
   triggerPullSurge();
   state.rocks = makePullRocks(state.depth);
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
@@ -727,8 +727,17 @@ function startPull() {
 function triggerPullSurge() {
   for (const fish of state.fish) {
     if (fish.hooked || fish.escaped || fish.depth > state.pullStartDepth) continue;
-    fish.dir = Math.random() < 0.5 ? 1 : -1;
-    fish.surgeKick = 1.4 + Math.random() * 2.2;
+    const minShift = 220;
+    const goRight = fish.x < W / 2 ? Math.random() < 0.75 : Math.random() < 0.25;
+    const minTarget = goRight ? Math.min(W - 68, fish.x + minShift) : 68;
+    const maxTarget = goRight ? W - 68 : Math.max(68, fish.x - minShift);
+    fish.shuffleTargetX = goRight
+      ? minTarget + Math.random() * Math.max(0, maxTarget - minTarget)
+      : minTarget + Math.random() * Math.max(0, maxTarget - minTarget);
+    fish.shuffleTimer = 0.72 + Math.random() * 0.22;
+    fish.shuffleDuration = fish.shuffleTimer;
+    fish.shuffleStartX = fish.x;
+    fish.dir = fish.shuffleTargetX >= fish.x ? 1 : -1;
     fish.phase = Math.random() * Math.PI * 2;
   }
   state.effects.push({
@@ -736,7 +745,7 @@ function triggerPullSurge() {
     x: W / 2,
     y: hookDiveY,
     timer: 0,
-    duration: 0.65,
+    duration: 0.85,
   });
 }
 
@@ -1249,13 +1258,28 @@ function updateFish(dt) {
     if (fish.doubleFlash) fish.doubleFlash = Math.max(0, fish.doubleFlash - dt);
     if (fish.hooked) continue;
     const isSurging = surgeActive && fish.depth <= state.pullStartDepth;
-    const surgeBoost = isSurging ? 3.2 + (fish.surgeKick || 1) : 1;
-    if (isSurging && Math.random() < dt * 9) fish.dir *= -1;
-    fish.phase += dt * (isSurging ? 13 : 5.6);
-    fish.x += fish.speed * fish.dir * dt * 350 * surgeBoost;
+    if (fish.shuffleTimer > 0 && fish.shuffleTargetX != null) {
+      fish.shuffleTimer = Math.max(0, fish.shuffleTimer - dt);
+      const progress = 1 - fish.shuffleTimer / Math.max(0.001, fish.shuffleDuration || 0.75);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      fish.x = fish.shuffleStartX + (fish.shuffleTargetX - fish.shuffleStartX) * eased;
+      fish.phase += dt * 18;
+      if (fish.shuffleTimer <= 0) {
+        fish.x = fish.shuffleTargetX;
+        fish.shuffleTargetX = null;
+        fish.shuffleStartX = null;
+        fish.shuffleDuration = null;
+      }
+    } else {
+      const surgeBoost = isSurging ? 4.5 : 1;
+      if (isSurging && Math.random() < dt * 12) fish.dir *= -1;
+      fish.phase += dt * (isSurging ? 16 : 5.6);
+      fish.x += fish.speed * fish.dir * dt * 350 * surgeBoost;
+    }
 
     if (fish.x < 68) fish.dir = 1;
     if (fish.x > W - 68) fish.dir = -1;
+    fish.x = Math.max(68, Math.min(W - 68, fish.x));
   }
   state.pullSurgeTimer = Math.max(0, state.pullSurgeTimer - dt);
   state.hookShakeTimer = Math.max(0, state.hookShakeTimer - dt);
@@ -1455,12 +1479,15 @@ function drawEffects() {
       const progress = Math.min(1, effect.timer / effect.duration);
       const alpha = 1 - progress;
       ctx.save();
-      ctx.globalAlpha = alpha * 0.78;
+      ctx.globalAlpha = alpha * 0.9;
       ctx.strokeStyle = "#c9f6ff";
-      ctx.lineWidth = 8 * alpha + 2;
+      ctx.lineWidth = 12 * alpha + 3;
       ctx.beginPath();
-      ctx.arc(effect.x, effect.y, 42 + progress * 240, 0, Math.PI * 2);
+      ctx.arc(effect.x, effect.y, 52 + progress * 340, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.globalAlpha = alpha * 0.18;
+      ctx.fillStyle = "#c9f6ff";
+      ctx.fillRect(0, hookDiveY - 100 - progress * 35, W, 200 + progress * 70);
       ctx.globalAlpha = alpha;
       ctx.fillStyle = "#fff6da";
       ctx.strokeStyle = "#0b527c";
@@ -1468,8 +1495,8 @@ function drawEffects() {
       ctx.font = "950 30px Trebuchet MS";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.strokeText("CURRENT SHIFT", effect.x, effect.y - 92 - progress * 28);
-      ctx.fillText("CURRENT SHIFT", effect.x, effect.y - 92 - progress * 28);
+      ctx.strokeText("CURRENT SHIFT", effect.x, effect.y - 108 - progress * 34);
+      ctx.fillText("CURRENT SHIFT", effect.x, effect.y - 108 - progress * 34);
       ctx.restore();
       continue;
     }
@@ -1662,7 +1689,7 @@ function drawBubbles() {
 
 function drawHook() {
   const shake = state.hookShakeTimer > 0
-    ? Math.sin(state.time * 90) * 10 * (state.hookShakeTimer / 0.55)
+    ? Math.sin(state.time * 105) * 18 * (state.hookShakeTimer / 0.7)
     : 0;
   const x = W / 2 + shake;
   const y = state.hookY;
