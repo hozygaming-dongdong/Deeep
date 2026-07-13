@@ -48,6 +48,8 @@ const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
 const nopeColor = "#9aa3ad";
+const fishPayoutBoost = 1.5;
+const goldenBubbleHitScale = 2;
 let audioCtx = null;
 let music = null;
 
@@ -477,7 +479,7 @@ function specialForDepth(depth) {
 
 function randomizedMult(baseMult) {
   const variance = 0.85 + Math.random() * 0.3;
-  return Math.max(1, Math.round(baseMult * variance));
+  return Math.max(1, Math.round(baseMult * fishPayoutBoost * variance));
 }
 
 function finalPrizeForDepth() {
@@ -637,13 +639,13 @@ function makeFish() {
 
 function makeGoldenBubbles() {
   const bubbles = [];
-  for (let depth = 12; depth < maxDepth - 4; depth += 18 + Math.random() * 10) {
+  for (let depth = 14; depth < maxDepth - 4; depth += 26 + Math.random() * 14) {
     const x = 90 + Math.random() * (W - 180);
     bubbles.push({
       depth,
       baseX: x,
       x,
-      r: 24 + Math.random() * 8,
+      r: 48 + Math.random() * 16,
       phase: Math.random() * Math.PI * 2,
       dir: Math.random() < 0.5 ? -1 : 1,
       speed: 32 + Math.random() * 58,
@@ -973,7 +975,7 @@ function maybeTriggerGoldenBubble(previousDepth) {
 
     const bubbleY = yForDepth(bubble.depth);
     const distance = Math.hypot(bubble.x - W / 2, bubbleY - hookDiveY);
-    if (distance <= hookCatchRadius + bubble.r) {
+    if (distance <= hookCatchRadius + bubble.r * goldenBubbleHitScale) {
       bubble.triggered = true;
       startGoldenBubbleRoulette();
       return;
@@ -1076,7 +1078,7 @@ function pickGoldenBubbleLanding(outcome) {
 
 function makePullRocks(startDepth) {
   const rocks = [];
-  for (let depth = Math.max(8, startDepth - 8); depth > 4; depth -= 7 + Math.random() * 5) {
+  for (let depth = Math.max(8, startDepth - 8); depth > 4; depth -= 10 + Math.random() * 7) {
     rocks.push({
       depth,
       x: 110 + Math.random() * (W - 220),
