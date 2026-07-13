@@ -1604,15 +1604,15 @@ function addBubbles(dt) {
 function drawBackground() {
   const depthRatio = Math.min(1, state.depth / maxDepth);
   const sea = ctx.createLinearGradient(0, 0, 0, H);
-  sea.addColorStop(0, depthRatio < 0.2 ? "#61c2df" : "#276f91");
-  sea.addColorStop(0.18, depthRatio < 0.52 ? "#127aa7" : "#0b527c");
-  sea.addColorStop(0.45, depthRatio < 0.52 ? "#0c4c76" : "#08385f");
-  sea.addColorStop(0.72, depthRatio < 0.52 ? "#082c4b" : "#041d38");
-  sea.addColorStop(1, depthRatio < 0.52 ? "#051725" : "#020914");
+  sea.addColorStop(0, depthRatio < 0.2 ? "#61c2df" : depthRatio < 0.62 ? "#2b8fb1" : "#1c6d94");
+  sea.addColorStop(0.18, depthRatio < 0.52 ? "#127aa7" : "#126888");
+  sea.addColorStop(0.45, depthRatio < 0.52 ? "#0c4c76" : "#0b4e74");
+  sea.addColorStop(0.72, depthRatio < 0.52 ? "#082c4b" : "#08375e");
+  sea.addColorStop(1, depthRatio < 0.52 ? "#051725" : "#062846");
   ctx.fillStyle = sea;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.globalAlpha = Math.max(0.08, 0.4 - depthRatio * 0.32);
+  ctx.globalAlpha = Math.max(0.1, 0.42 - depthRatio * 0.18);
   for (let i = 0; i < 7; i += 1) {
     const y = 92 + i * 21 + Math.sin(state.time * 1.4 + i) * 5;
     ctx.beginPath();
@@ -1626,6 +1626,21 @@ function drawBackground() {
   }
   ctx.globalAlpha = 1;
 
+  if (depthRatio > 0.28) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.2, (depthRatio - 0.28) * 0.22);
+    ctx.strokeStyle = "#9eeaff";
+    ctx.lineWidth = 28;
+    for (let i = 0; i < 3; i += 1) {
+      const x = 115 + i * 230 + Math.sin(state.time * 0.35 + i) * 26;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x - 70, H);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   if (state.depth < 0.45 && state.status === "ready") {
     drawBoat();
   }
@@ -1635,18 +1650,29 @@ function drawBackground() {
 }
 
 function drawDepthShade(depthRatio) {
-  const darkness = Math.min(0.72, depthRatio * 0.68);
+  const haze = Math.min(0.28, depthRatio * 0.22);
+  const edgeDarkness = Math.min(0.42, depthRatio * 0.34);
   const danger = riskForDepth(Math.max(1, state.depth)).label === "HIGH";
 
   ctx.save();
-  ctx.fillStyle = `rgba(0, 8, 20, ${darkness})`;
+  ctx.fillStyle = `rgba(11, 54, 86, ${haze})`;
   ctx.fillRect(0, 0, W, H);
 
   if (depthRatio > 0.2) {
-    const vignette = ctx.createRadialGradient(W / 2, hookDiveY, 80, W / 2, hookDiveY, 520);
-    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-    vignette.addColorStop(1, `rgba(0, 0, 0, ${0.16 + depthRatio * 0.34})`);
+    const vignette = ctx.createRadialGradient(W / 2, hookDiveY, 80, W / 2, hookDiveY, 560);
+    vignette.addColorStop(0, "rgba(170, 244, 255, 0.12)");
+    vignette.addColorStop(0.34, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, `rgba(0, 11, 28, ${edgeDarkness})`);
     ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  if (depthRatio > 0.35) {
+    const lamp = ctx.createRadialGradient(W / 2, hookDiveY, 20, W / 2, hookDiveY, 230);
+    lamp.addColorStop(0, `rgba(195, 249, 255, ${0.13 + depthRatio * 0.07})`);
+    lamp.addColorStop(0.55, `rgba(108, 213, 236, ${0.06 + depthRatio * 0.035})`);
+    lamp.addColorStop(1, "rgba(108, 213, 236, 0)");
+    ctx.fillStyle = lamp;
     ctx.fillRect(0, 0, W, H);
   }
 
