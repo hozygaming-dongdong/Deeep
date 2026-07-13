@@ -506,6 +506,11 @@ function chooseRoundBoss() {
     { boss: bossCatalog.octopus, weight: chanceSliderValue(octopusChanceSlider, defaultOctopusChance) },
     { boss: bossCatalog.mystery, weight: chanceSliderValue(mysteryChanceSlider, defaultMysteryChance) },
   ];
+  const forced = weights.filter((item) => item.weight >= 1);
+  if (forced.length) {
+    return forced[Math.floor(Math.random() * forced.length)].boss;
+  }
+
   const totalWeight = weights.reduce((total, item) => total + item.weight, 0);
   const spawnChance = Math.min(1, totalWeight);
   if (totalWeight <= 0 || Math.random() > spawnChance) return null;
@@ -735,6 +740,13 @@ function updateBossChanceText() {
   if (mysteryChanceSlider && mysteryChanceText) mysteryChanceText.textContent = `${mysteryChanceSlider.value}%`;
 }
 
+function handleBossChanceInput() {
+  updateBossChanceText();
+  if (state.status === "ready") {
+    resetRound();
+  }
+}
+
 function startPull() {
   ensureAudio();
   ensureMusic();
@@ -907,13 +919,15 @@ function updatePull(dt) {
   updatePullRocks(dt);
 
   for (const fish of state.fish) {
-    if (fish.hooked || fish.escaped || state.caughtFish.length >= maxCaughtFish()) continue;
+    if (fish.hooked || fish.escaped) continue;
+    if (state.caughtFish.length >= maxCaughtFish() && !fish.isBoss) continue;
     if (fish.depth < state.depth || fish.depth > previousDepth) continue;
 
     const fishY = yForDepth(fish.depth);
     const distance = Math.hypot(fish.x - W / 2, fishY - hookDiveY);
     const catchRadius = fish.isBoss ? hookCatchRadius + 52 : hookCatchRadius;
     if (distance <= catchRadius) {
+      if (!makeCatchRoom(fish)) continue;
       fish.hooked = true;
       fish.chainIndex = state.caughtFish.length;
       state.caughtFish.push(fish);
@@ -934,6 +948,20 @@ function updatePull(dt) {
 
 function maxCaughtFish() {
   return state.caughtFish.some((fish) => fish.bossType === "octopus") ? 8 : 5;
+}
+
+function makeCatchRoom(fish) {
+  if (state.caughtFish.length < maxCaughtFish()) return true;
+  if (!fish.isBoss) return false;
+
+  const replaceIndex = state.caughtFish.findIndex((caught) => !caught.isBoss);
+  if (replaceIndex < 0) return false;
+
+  const [dropped] = state.caughtFish.splice(replaceIndex, 1);
+  dropped.hooked = false;
+  dropped.escaped = true;
+  addRockHitEffect({ x: W / 2, y: hookDiveY + 30 }, 1);
+  return true;
 }
 
 function maybeTriggerGoldenBubble(previousDepth) {
@@ -3108,13 +3136,13 @@ if (devToggleButton && devControls) {
   });
 }
 if (crimsonChanceSlider) {
-  crimsonChanceSlider.addEventListener("input", updateBossChanceText);
+  crimsonChanceSlider.addEventListener("input", handleBossChanceInput);
 }
 if (octopusChanceSlider) {
-  octopusChanceSlider.addEventListener("input", updateBossChanceText);
+  octopusChanceSlider.addEventListener("input", handleBossChanceInput);
 }
 if (mysteryChanceSlider) {
-  mysteryChanceSlider.addEventListener("input", updateBossChanceText);
+  mysteryChanceSlider.addEventListener("input", handleBossChanceInput);
 }
 
 document.addEventListener("contextmenu", (event) => event.preventDefault());
