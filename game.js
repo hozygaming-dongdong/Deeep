@@ -585,7 +585,7 @@ function resetRound() {
 function makeFish() {
   const fish = [];
 
-  for (let depth = 1.2; depth < maxDepth; depth += 2.1 + Math.random() * 1.8) {
+  for (let depth = 1.2; depth < maxDepth; depth += 1.05 + Math.random() * 0.9) {
     const item = specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
     fish.push(makeFishInstance(item, index, depth));
@@ -1222,7 +1222,7 @@ function updateFish(dt) {
     if (fish.doubleFlash) fish.doubleFlash = Math.max(0, fish.doubleFlash - dt);
     if (fish.hooked) continue;
     fish.phase += dt * 5.6;
-    fish.x += fish.speed * fish.dir * dt * 175;
+    fish.x += fish.speed * fish.dir * dt * 350;
 
     if (fish.x < 68) fish.dir = 1;
     if (fish.x > W - 68) fish.dir = -1;
