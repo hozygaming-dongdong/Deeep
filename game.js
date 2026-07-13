@@ -56,13 +56,14 @@ const state = {
   status: "ready",
   isHolding: false,
   sharksEnabled: true,
-  fakePlayersEnabled: true,
+  fakePlayersEnabled: false,
   lastTickDepth: 0,
   hookY: hookDiveY,
   messageTimer: 0,
   bubbles: [],
   effects: [],
   fish: [],
+  rocks: [],
   shark: null,
   caughtFish: null,
   bestCandidate: null,
@@ -557,9 +558,10 @@ function resetRound() {
   state.messageTimer = 0;
   state.shark = null;
   state.effects = [];
-  state.caughtFish = null;
+  state.rocks = [];
+  state.caughtFish = [];
   state.bestCandidate = null;
-  state.roundBoss = chooseRoundBoss();
+  state.roundBoss = null;
   state.bossOmen = omenForBoss(state.roundBoss);
   state.bossOmenTriggered = false;
   state.bossOmenTimer = 0;
@@ -589,7 +591,7 @@ function makeFish() {
     fish.push(makeFishInstance(item, index, depth));
   }
 
-  const boss = state.roundBoss;
+  const boss = null;
   if (boss) {
     const bossDepth = 82 + Math.random() * 16;
     fish.push(makeFishInstance(boss, fish.length, bossDepth, {
@@ -635,7 +637,9 @@ function updateHud() {
   riskText.textContent = risk.label;
   riskText.style.color = risk.color;
   costText.textContent = money(state.spent);
-  bestFishText.textContent = state.bestCandidate
+  bestFishText.textContent = state.caughtFish.length
+    ? `${state.caughtFish.length} FISH ${money(caughtFishPayout())}`
+    : state.bestCandidate
     ? `${state.bestCandidate.name} ${fishValue(state.bestCandidate)}`
     : "-";
 }
@@ -703,6 +707,7 @@ function startPull() {
   state.isHolding = false;
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
+  state.rocks = makePullRocks(state.depth);
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = true;
   pullButton.disabled = true;
@@ -768,64 +773,98 @@ function triggerShark() {
 function updatePull(dt) {
   if (state.status !== "pulling") return;
 
-  updateBossWheel(dt);
-  if (state.status !== "pulling") return;
-  if (state.bossWheel) return;
-
-  updateRoulette(dt);
-  if (state.status !== "pulling") return;
-  if (state.roulette) return;
-
   const pullSpeed = 6.2;
   const previousDepth = state.depth;
   state.depth = Math.max(0, state.depth - pullSpeed * dt);
   state.hookY = yForDepth(state.depth);
 
+  updatePullRocks(dt);
+
   for (const fish of state.fish) {
-    if (fish.attempted || fish.depth < state.depth || fish.depth > previousDepth) continue;
+    if (fish.hooked || fish.escaped || fish.isBoss || state.caughtFish.length >= 5) continue;
+    if (fish.depth < state.depth || fish.depth > previousDepth) continue;
 
-    if (state.caughtFish?.bossType === "octopus" && !fish.isBoss) {
-      const pathDistance = Math.abs(fish.x - W / 2);
-      const grabChance = pathDistance < 150 ? 0.62 : pathDistance < 260 ? 0.34 : 0.12;
-      fish.attempted = true;
-      if (Math.random() < grabChance) {
-        fish.escaped = true;
-        state.caughtFish.collectorBonusMult = (state.caughtFish.collectorBonusMult || 0) + fish.mult;
-        state.caughtFish.collectorCount = (state.caughtFish.collectorCount || 0) + 1;
-        state.bestCandidate = state.caughtFish;
-        addCollectorEffect(fish, state.caughtFish);
-        sound.hook();
-      }
-      continue;
-    }
-
-    fish.attempted = true;
-    const pathDistance = Math.abs(fish.x - W / 2);
-    const pathBonus = pathDistance < 95 ? 0.18 : pathDistance < 175 ? 0.05 : -0.08;
-    const chance = Math.max(0.04, Math.min(0.9, fish.catchRate + pathBonus));
-
-    const canHook = !state.caughtFish || (fish.isBoss && !state.caughtFish.isBoss);
-    if (canHook && Math.random() < chance) {
-      if (state.caughtFish && fish.isBoss) {
-        state.caughtFish.hooked = false;
-      }
+    const fishY = yForDepth(fish.depth);
+    const distance = Math.hypot(fish.x - W / 2, fishY - hookDiveY);
+    if (distance <= 55) {
       fish.hooked = true;
-      state.caughtFish = fish;
+      fish.chainIndex = state.caughtFish.length;
+      state.caughtFish.push(fish);
       state.bestCandidate = fish;
-      setupStruggleChecks(fish);
       sound.hook();
     }
   }
 
-  if (state.caughtFish) {
-    state.caughtFish.x += (W / 2 - state.caughtFish.x) * Math.min(1, dt * 8);
-    state.caughtFish.y = hookDiveY + 62;
-  }
+  updateCaughtFishChain(dt);
+  checkRockHits();
 
   if (state.depth <= 0) {
     finishPull();
   }
 }
+
+function makePullRocks(startDepth) {
+  const rocks = [];
+  for (let depth = Math.max(8, startDepth - 8); depth > 4; depth -= 10 + Math.random() * 8) {
+    rocks.push({
+      depth,
+      x: 110 + Math.random() * (W - 220),
+      y: yForDepth(depth),
+      w: 92 + Math.random() * 66,
+      h: 28 + Math.random() * 16,
+      dir: Math.random() < 0.5 ? 1 : -1,
+      speed: 65 + Math.random() * 78,
+      cooldown: 0,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+  return rocks;
+}
+
+function updatePullRocks(dt) {
+  for (const rock of state.rocks) {
+    rock.x += rock.dir * rock.speed * dt;
+    rock.y = yForDepth(rock.depth);
+    rock.cooldown = Math.max(0, rock.cooldown - dt);
+    if (rock.x < 70 || rock.x > W - 70) rock.dir *= -1;
+  }
+}
+
+function updateCaughtFishChain(dt) {
+  state.caughtFish.forEach((fish, index) => {
+    fish.chainIndex = index;
+    fish.x += (W / 2 + Math.sin(state.time * 7 + index) * 18 - fish.x) * Math.min(1, dt * 9);
+    fish.y = hookDiveY + 64 + index * 34;
+  });
+}
+
+function checkRockHits() {
+  if (!state.caughtFish.length) return;
+  for (const rock of state.rocks) {
+    if (rock.cooldown > 0) continue;
+    if (rock.y < hookDiveY - 35 || rock.y > hookDiveY + 88 + state.caughtFish.length * 34) continue;
+    if (Math.abs(rock.x - W / 2) > rock.w * 0.5 + 34) continue;
+
+    const dropCount = 1 + Math.floor(Math.random() * state.caughtFish.length);
+    dropCaughtFish(dropCount, rock);
+    rock.cooldown = 1.6;
+    sound.escape();
+  }
+}
+
+function dropCaughtFish(count, rock) {
+  const dropped = [];
+  for (let i = 0; i < count && state.caughtFish.length; i += 1) {
+    const index = Math.floor(Math.random() * state.caughtFish.length);
+    const [fish] = state.caughtFish.splice(index, 1);
+    fish.hooked = false;
+    fish.escaped = true;
+    dropped.push(fish);
+  }
+  addRockHitEffect(rock, dropped.length);
+  state.bestCandidate = state.caughtFish[state.caughtFish.length - 1] || null;
+}
+
 
 function struggleProfile(fish) {
   if (fish.mult <= 4) return { count: 1, escapeChance: 0.06, progress: [0.6] };
@@ -1075,28 +1114,25 @@ function updateRoulette(dt) {
 }
 
 function finishPull() {
-  if (!state.caughtFish) {
+  if (!state.caughtFish.length) {
     sound.lose();
     showResult("EMPTY HOOK", "No Catch", "The hook came back clean. Payout is $0.", true);
     return;
   }
 
-  const fish = state.caughtFish;
-  if (fish.bossType === "mystery" && !fish.mysteryOpened) {
-    state.pendingMysteryFish = fish;
-    showResult("BOSS LANDED", "Golden Pearl Clam", "Tap OPEN CLAM to reveal the pearl prize.", true, "OPEN CLAM");
-    return;
-  }
-
-  const payout = payoutForCatch(fish);
+  const payout = caughtFishPayout();
   state.balance += payout;
   sound.win();
   showResult(
-    fish.isBoss ? "BOSS LANDED" : "CAUGHT",
-    `${fish.name} ${money(payout)}`,
-    resultBodyForCatch(fish, payout),
+    "CAUGHT",
+    `${state.caughtFish.length} Fish ${money(payout)}`,
+    `Payout ${money(payout)} from ${state.caughtFish.length} fish. Total dive cost was ${money(state.spent)}.`,
     true
   );
+}
+
+function caughtFishPayout() {
+  return state.caughtFish.reduce((total, fish) => total + bet() * fish.mult, 0);
 }
 
 function payoutForCatch(fish) {
@@ -1185,8 +1221,8 @@ function updateFish(dt) {
   for (const fish of state.fish) {
     if (fish.doubleFlash) fish.doubleFlash = Math.max(0, fish.doubleFlash - dt);
     if (fish.hooked) continue;
-    fish.phase += dt * 2.4;
-    fish.x += fish.speed * fish.dir * dt * 34;
+    fish.phase += dt * 4.2;
+    fish.x += fish.speed * fish.dir * dt * 118;
 
     if (fish.x < 68) fish.dir = 1;
     if (fish.x > W - 68) fish.dir = -1;
@@ -1213,6 +1249,17 @@ function addCollectorEffect(fish, boss) {
     duration: 1.0,
     value: bet() * fish.mult,
     total: bet() * ((boss.mult || 0) + (boss.collectorBonusMult || 0)),
+  });
+}
+
+function addRockHitEffect(rock, count) {
+  state.effects.push({
+    type: "rock-hit",
+    x: W / 2,
+    y: hookDiveY + 30,
+    timer: 0,
+    duration: 1.0,
+    count,
   });
 }
 
@@ -1372,6 +1419,22 @@ function drawDepthShade(depthRatio) {
 
 function drawEffects() {
   for (const effect of state.effects) {
+    if (effect.type === "rock-hit") {
+      const progress = Math.min(1, effect.timer / effect.duration);
+      const alpha = 1 - progress;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = "#ff5966";
+      ctx.strokeStyle = "#2b0710";
+      ctx.lineWidth = 5;
+      ctx.font = "950 38px Trebuchet MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.strokeText(`LOST ${effect.count}`, effect.x, effect.y - progress * 42);
+      ctx.fillText(`LOST ${effect.count}`, effect.x, effect.y - progress * 42);
+      ctx.restore();
+      continue;
+    }
     if (effect.type === "collector") {
       const progress = Math.min(1, effect.timer / effect.duration);
       const alpha = 1 - progress;
@@ -1491,6 +1554,30 @@ function drawRocks() {
   ctx.restore();
 }
 
+function drawPullRocks() {
+  if (state.status !== "pulling") return;
+  for (const rock of state.rocks) {
+    if (rock.y < hookTop - 80 || rock.y > H - 160) continue;
+    ctx.save();
+    ctx.translate(rock.x, rock.y + Math.sin(state.time * 3 + rock.phase) * 4);
+    ctx.fillStyle = rock.cooldown > 0 ? "rgba(255, 89, 102, 0.78)" : "rgba(67, 76, 86, 0.88)";
+    ctx.strokeStyle = "rgba(8, 18, 31, 0.82)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-rock.w * 0.5, rock.h * 0.2);
+    ctx.lineTo(-rock.w * 0.32, -rock.h * 0.55);
+    ctx.lineTo(-rock.w * 0.05, -rock.h * 0.35);
+    ctx.lineTo(rock.w * 0.22, -rock.h * 0.62);
+    ctx.lineTo(rock.w * 0.5, rock.h * 0.1);
+    ctx.lineTo(rock.w * 0.28, rock.h * 0.55);
+    ctx.lineTo(-rock.w * 0.28, rock.h * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawBubbles() {
   ctx.save();
   for (const bubble of state.bubbles) {
@@ -1508,6 +1595,21 @@ function drawHook() {
   const x = W / 2;
   const y = state.hookY;
   ctx.save();
+
+  if (state.status === "pulling") {
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = "#ffd36a";
+    ctx.beginPath();
+    ctx.arc(x, hookDiveY, 55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.65;
+    ctx.strokeStyle = "#ffd36a";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, hookDiveY, 55, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 
   ctx.strokeStyle = "#b9934b";
   ctx.lineWidth = 9;
@@ -2481,6 +2583,7 @@ function render() {
   drawBackground();
   for (const fish of state.fish) drawFish(fish);
   drawFakePlayers();
+  drawPullRocks();
   drawHook();
   drawShark();
   drawEffects();
