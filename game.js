@@ -631,11 +631,16 @@ function makeFish() {
 function makeGoldenBubbles() {
   const bubbles = [];
   for (let depth = 12; depth < maxDepth - 4; depth += 18 + Math.random() * 10) {
+    const x = 90 + Math.random() * (W - 180);
     bubbles.push({
       depth,
-      x: 90 + Math.random() * (W - 180),
+      baseX: x,
+      x,
       r: 24 + Math.random() * 8,
       phase: Math.random() * Math.PI * 2,
+      dir: Math.random() < 0.5 ? -1 : 1,
+      speed: 32 + Math.random() * 58,
+      driftRange: 70 + Math.random() * 120,
       triggered: false,
     });
   }
@@ -917,6 +922,23 @@ function maybeTriggerGoldenBubble(previousDepth) {
       bubble.triggered = true;
       startGoldenBubbleRoulette();
       return;
+    }
+  }
+}
+
+function updateGoldenBubbles(dt) {
+  for (const bubble of state.goldenBubbles) {
+    if (bubble.triggered) continue;
+    bubble.x += bubble.dir * bubble.speed * dt;
+
+    const left = Math.max(62, bubble.baseX - bubble.driftRange);
+    const right = Math.min(W - 62, bubble.baseX + bubble.driftRange);
+    if (bubble.x <= left) {
+      bubble.x = left;
+      bubble.dir = 1;
+    } else if (bubble.x >= right) {
+      bubble.x = right;
+      bubble.dir = -1;
     }
   }
 }
@@ -2891,6 +2913,7 @@ function frame(now) {
   sinkStep(dt);
   updatePullShuffle(dt);
   updateRoulette(dt);
+  updateGoldenBubbles(dt);
   updatePull(dt);
   updateShark(dt);
   updateFish(dt);
