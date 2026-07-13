@@ -73,6 +73,7 @@ const state = {
   bossOmenTimer: 0,
   pullProgress: 0,
   pullStartDepth: 0,
+  pullShuffleTimer: 0,
   pullSurgeTimer: 0,
   hookShakeTimer: 0,
   roulette: null,
@@ -274,7 +275,7 @@ function updateMusic() {
 
   const now = audioCtx.currentTime;
   const depthRatio = Math.min(1, state.depth / maxDepth);
-  const active = state.status === "diving" || state.status === "pulling" || state.status === "cut";
+  const active = state.status === "diving" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut";
   const masterTarget = Math.min(0.78, (active ? 0.24 + depthRatio * 0.1 : 0.105) * musicVolumeBoost);
   const pulseTarget = active ? 0.022 + depthRatio * 0.045 : 0.004;
   const tensionTarget = depthRatio > 0.45 ? (depthRatio - 0.45) * 0.045 : 0.0001;
@@ -570,6 +571,7 @@ function resetRound() {
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
   state.pullStartDepth = 0;
+  state.pullShuffleTimer = 0;
   state.pullSurgeTimer = 0;
   state.hookShakeTimer = 0;
   state.roulette = null;
@@ -709,15 +711,15 @@ function updateBossChanceText() {
 function startPull() {
   ensureAudio();
   ensureMusic();
-  state.status = "pulling";
+  state.status = "shuffle";
   state.isHolding = false;
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
   state.pullStartDepth = state.depth;
-  state.pullSurgeTimer = 0.9;
-  state.hookShakeTimer = 0.7;
-  triggerPullSurge();
-  state.rocks = makePullRocks(state.depth);
+  state.pullShuffleTimer = triggerPullSurge();
+  state.pullSurgeTimer = state.pullShuffleTimer;
+  state.hookShakeTimer = state.pullShuffleTimer;
+  state.rocks = [];
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = true;
   pullButton.disabled = true;
@@ -725,28 +727,40 @@ function startPull() {
 }
 
 function triggerPullSurge() {
+  let longestShuffle = 0;
   for (const fish of state.fish) {
     if (fish.hooked || fish.escaped || fish.depth > state.pullStartDepth) continue;
-    const minShift = 220;
-    const goRight = fish.x < W / 2 ? Math.random() < 0.75 : Math.random() < 0.25;
-    const minTarget = goRight ? Math.min(W - 68, fish.x + minShift) : 68;
-    const maxTarget = goRight ? W - 68 : Math.max(68, fish.x - minShift);
-    fish.shuffleTargetX = goRight
-      ? minTarget + Math.random() * Math.max(0, maxTarget - minTarget)
-      : minTarget + Math.random() * Math.max(0, maxTarget - minTarget);
-    fish.shuffleTimer = 0.72 + Math.random() * 0.22;
+    fish.shuffleTimer = 0.5 + Math.random() * 1.0;
     fish.shuffleDuration = fish.shuffleTimer;
-    fish.shuffleStartX = fish.x;
-    fish.dir = fish.shuffleTargetX >= fish.x ? 1 : -1;
+    fish.shuffleSpeed = 4.5 + Math.random() * 4.5;
+    fish.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
+    fish.dir = Math.random() < 0.5 ? -1 : 1;
     fish.phase = Math.random() * Math.PI * 2;
+    longestShuffle = Math.max(longestShuffle, fish.shuffleTimer);
   }
+  longestShuffle = Math.max(0.5, longestShuffle);
   state.effects.push({
     type: "pull-surge",
     x: W / 2,
     y: hookDiveY,
     timer: 0,
-    duration: 0.85,
+    duration: longestShuffle,
   });
+  return longestShuffle;
+}
+
+function finishPullShuffle() {
+  state.status = "pulling";
+  state.pullShuffleTimer = 0;
+  state.pullSurgeTimer = 0;
+  state.hookShakeTimer = 0;
+  for (const fish of state.fish) {
+    fish.shuffleTimer = 0;
+    fish.shuffleDuration = null;
+    fish.shuffleSpeed = null;
+    fish.shuffleTurnTimer = null;
+  }
+  state.rocks = makePullRocks(state.depth);
 }
 
 function sinkStep(dt) {
@@ -803,6 +817,15 @@ function triggerShark() {
     done: false,
   };
   sound.shark();
+}
+
+function updatePullShuffle(dt) {
+  if (state.status !== "shuffle") return;
+  state.pullShuffleTimer = Math.max(0, state.pullShuffleTimer - dt);
+  state.hookY = yForDepth(state.depth);
+  if (state.pullShuffleTimer <= 0) {
+    finishPullShuffle();
+  }
 }
 
 function updatePull(dt) {
@@ -1253,28 +1276,28 @@ function updateShark(dt) {
 }
 
 function updateFish(dt) {
-  const surgeActive = state.status === "pulling" && state.pullSurgeTimer > 0;
+  const surgeActive = state.status === "shuffle" && state.pullSurgeTimer > 0;
   for (const fish of state.fish) {
     if (fish.doubleFlash) fish.doubleFlash = Math.max(0, fish.doubleFlash - dt);
     if (fish.hooked) continue;
     const isSurging = surgeActive && fish.depth <= state.pullStartDepth;
-    if (fish.shuffleTimer > 0 && fish.shuffleTargetX != null) {
+    if (isSurging && fish.shuffleTimer > 0) {
       fish.shuffleTimer = Math.max(0, fish.shuffleTimer - dt);
-      const progress = 1 - fish.shuffleTimer / Math.max(0.001, fish.shuffleDuration || 0.75);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      fish.x = fish.shuffleStartX + (fish.shuffleTargetX - fish.shuffleStartX) * eased;
-      fish.phase += dt * 18;
+      fish.shuffleTurnTimer = Math.max(0, (fish.shuffleTurnTimer || 0) - dt);
+      if (fish.shuffleTurnTimer <= 0 && Math.random() < 0.72) {
+        fish.dir *= -1;
+        fish.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
+      }
+      fish.phase += dt * 22;
+      fish.x += fish.speed * fish.dir * dt * 350 * (fish.shuffleSpeed || 5);
       if (fish.shuffleTimer <= 0) {
-        fish.x = fish.shuffleTargetX;
-        fish.shuffleTargetX = null;
-        fish.shuffleStartX = null;
         fish.shuffleDuration = null;
+        fish.shuffleSpeed = null;
+        fish.shuffleTurnTimer = null;
       }
     } else {
-      const surgeBoost = isSurging ? 4.5 : 1;
-      if (isSurging && Math.random() < dt * 12) fish.dir *= -1;
-      fish.phase += dt * (isSurging ? 16 : 5.6);
-      fish.x += fish.speed * fish.dir * dt * 350 * surgeBoost;
+      fish.phase += dt * 5.6;
+      fish.x += fish.speed * fish.dir * dt * 350;
     }
 
     if (fish.x < 68) fish.dir = 1;
@@ -1689,7 +1712,7 @@ function drawBubbles() {
 
 function drawHook() {
   const shake = state.hookShakeTimer > 0
-    ? Math.sin(state.time * 105) * 18 * (state.hookShakeTimer / 0.7)
+    ? Math.sin(state.time * 105) * 18 * Math.min(1, state.hookShakeTimer / 0.7)
     : 0;
   const x = W / 2 + shake;
   const y = state.hookY;
@@ -2710,6 +2733,7 @@ function frame(now) {
   state.time += dt;
 
   sinkStep(dt);
+  updatePullShuffle(dt);
   updatePull(dt);
   updateShark(dt);
   updateFish(dt);
@@ -2724,7 +2748,7 @@ function frame(now) {
 }
 
 function changeBet(delta) {
-  if (state.status === "diving" || state.status === "pulling" || state.status === "cut") return;
+  if (state.status === "diving" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut") return;
   state.betIndex = Math.max(0, Math.min(betSteps.length - 1, state.betIndex + delta));
   deepButton.disabled = state.balance < bet();
   updateHud();
