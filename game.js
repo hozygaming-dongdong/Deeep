@@ -765,6 +765,18 @@ function triggerPullSurge() {
     fish.phase = Math.random() * Math.PI * 2;
     longestShuffle = Math.max(longestShuffle, fish.shuffleTimer);
   }
+
+  for (const bubble of state.goldenBubbles) {
+    if (bubble.triggered || bubble.depth > state.pullStartDepth) continue;
+    bubble.shuffleTimer = 0.5 + Math.random() * 1.0;
+    bubble.shuffleDuration = bubble.shuffleTimer;
+    bubble.shuffleSpeed = 180 + Math.random() * 260;
+    bubble.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
+    bubble.dir = Math.random() < 0.5 ? -1 : 1;
+    bubble.phase = Math.random() * Math.PI * 2;
+    longestShuffle = Math.max(longestShuffle, bubble.shuffleTimer);
+  }
+
   longestShuffle = Math.max(0.5, longestShuffle);
   state.effects.push({
     type: "pull-surge",
@@ -787,6 +799,13 @@ function finishPullShuffle() {
     fish.shuffleDuration = null;
     fish.shuffleSpeed = null;
     fish.shuffleTurnTimer = null;
+  }
+  for (const bubble of state.goldenBubbles) {
+    bubble.shuffleTimer = 0;
+    bubble.shuffleDuration = null;
+    bubble.shuffleSpeed = null;
+    bubble.shuffleTurnTimer = null;
+    bubble.baseX = bubble.x;
   }
   state.rocks = makePullRocks(state.depth);
 }
@@ -927,12 +946,31 @@ function maybeTriggerGoldenBubble(previousDepth) {
 }
 
 function updateGoldenBubbles(dt) {
+  const surgeActive = state.status === "shuffle" && state.pullSurgeTimer > 0;
   for (const bubble of state.goldenBubbles) {
     if (bubble.triggered) continue;
-    bubble.x += bubble.dir * bubble.speed * dt;
 
-    const left = Math.max(62, bubble.baseX - bubble.driftRange);
-    const right = Math.min(W - 62, bubble.baseX + bubble.driftRange);
+    const isShuffling = surgeActive && bubble.depth <= state.pullStartDepth && bubble.shuffleTimer > 0;
+    if (isShuffling) {
+      bubble.shuffleTimer = Math.max(0, bubble.shuffleTimer - dt);
+      bubble.shuffleTurnTimer = Math.max(0, (bubble.shuffleTurnTimer || 0) - dt);
+      if (bubble.shuffleTurnTimer <= 0 && Math.random() < 0.72) {
+        bubble.dir *= -1;
+        bubble.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
+      }
+      bubble.phase += dt * 18;
+      bubble.x += bubble.dir * (bubble.shuffleSpeed || 220) * dt;
+      if (bubble.shuffleTimer <= 0) {
+        bubble.shuffleDuration = null;
+        bubble.shuffleSpeed = null;
+        bubble.shuffleTurnTimer = null;
+      }
+    } else {
+      bubble.x += bubble.dir * bubble.speed * dt;
+    }
+
+    const left = isShuffling ? 62 : Math.max(62, bubble.baseX - bubble.driftRange);
+    const right = isShuffling ? W - 62 : Math.min(W - 62, bubble.baseX + bubble.driftRange);
     if (bubble.x <= left) {
       bubble.x = left;
       bubble.dir = 1;
