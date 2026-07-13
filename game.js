@@ -41,8 +41,8 @@ const TAU = Math.PI * 2;
 const doubleChance = 0.12;
 const bossDoubleChance = 0.5;
 const defaultCrimsonChance = 0.1;
-const defaultOctopusChance = 0.08;
-const defaultMysteryChance = 0.06;
+const defaultOctopusChance = 0.1;
+const defaultMysteryChance = 0.1;
 const musicVolumeBoost = 1.8;
 const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
@@ -545,7 +545,7 @@ function makeFishInstance(item, index, depth, overrides = {}) {
     x: overrides.x ?? lanes[index % lanes.length] + Math.random() * 54 - 27,
     depth: overrides.depth ?? Math.min(maxDepth - 0.2, depth + Math.random() * 0.9),
     dir: overrides.dir ?? (index % 2 === 0 ? 1 : -1),
-    speed: 0.25 + Math.random() * 0.55,
+    speed: overrides.speed ?? (0.25 + Math.random() * 0.55),
     phase: Math.random() * Math.PI * 2,
     valueMultiplier: 1,
     attempted: false,
@@ -570,7 +570,7 @@ function resetRound() {
   state.goldenBubbles = [];
   state.caughtFish = [];
   state.bestCandidate = null;
-  state.roundBoss = null;
+  state.roundBoss = chooseRoundBoss();
   state.bossOmen = omenForBoss(state.roundBoss);
   state.bossOmenTriggered = false;
   state.bossOmenTimer = 0;
@@ -606,7 +606,7 @@ function makeFish() {
     fish.push(makeFishInstance(item, index, depth));
   }
 
-  const boss = null;
+  const boss = state.roundBoss;
   if (boss) {
     const bossDepth = 82 + Math.random() * 16;
     fish.push(makeFishInstance(boss, fish.length, bossDepth, {
@@ -615,6 +615,7 @@ function makeFish() {
       dir: Math.random() < 0.5 ? 1 : -1,
       fixedMult: boss.mult,
       isBoss: true,
+      speed: 0.18 + Math.random() * 0.22,
     }));
   }
 
@@ -906,12 +907,13 @@ function updatePull(dt) {
   updatePullRocks(dt);
 
   for (const fish of state.fish) {
-    if (fish.hooked || fish.escaped || fish.isBoss || state.caughtFish.length >= 5) continue;
+    if (fish.hooked || fish.escaped || state.caughtFish.length >= maxCaughtFish()) continue;
     if (fish.depth < state.depth || fish.depth > previousDepth) continue;
 
     const fishY = yForDepth(fish.depth);
     const distance = Math.hypot(fish.x - W / 2, fishY - hookDiveY);
-    if (distance <= hookCatchRadius) {
+    const catchRadius = fish.isBoss ? hookCatchRadius + 52 : hookCatchRadius;
+    if (distance <= catchRadius) {
       fish.hooked = true;
       fish.chainIndex = state.caughtFish.length;
       state.caughtFish.push(fish);
@@ -921,12 +923,17 @@ function updatePull(dt) {
   }
 
   maybeTriggerGoldenBubble(previousDepth);
+  updateOctopusCollector(dt);
   updateCaughtFishChain(dt);
   checkRockHits();
 
   if (state.depth <= 0) {
     finishPull();
   }
+}
+
+function maxCaughtFish() {
+  return state.caughtFish.some((fish) => fish.bossType === "octopus") ? 8 : 5;
 }
 
 function maybeTriggerGoldenBubble(previousDepth) {
@@ -943,6 +950,36 @@ function maybeTriggerGoldenBubble(previousDepth) {
       return;
     }
   }
+}
+
+function updateOctopusCollector(dt) {
+  const octopus = state.caughtFish.find((fish) => fish.bossType === "octopus");
+  if (!octopus || state.caughtFish.length >= maxCaughtFish()) return;
+
+  octopus.collectTimer = Math.max(0, (octopus.collectTimer || 0) - dt);
+  if (octopus.collectTimer > 0) return;
+  octopus.collectTimer = 0.38;
+
+  const candidates = state.fish
+    .filter((fish) => !fish.hooked && !fish.escaped && !fish.isBoss)
+    .map((fish) => ({
+      fish,
+      y: yForDepth(fish.depth),
+      distance: Math.hypot(fish.x - W / 2, yForDepth(fish.depth) - hookDiveY),
+    }))
+    .filter((item) => item.y > hookTop + 40 && item.y < H - 210 && item.distance < 165)
+    .sort((a, b) => a.distance - b.distance);
+
+  const target = candidates[0]?.fish;
+  if (!target) return;
+
+  target.hooked = true;
+  target.chainIndex = state.caughtFish.length;
+  state.caughtFish.push(target);
+  octopus.collectorCount = (octopus.collectorCount || 0) + 1;
+  state.bestCandidate = target;
+  addCollectorEffect(target, octopus);
+  sound.hook();
 }
 
 function updateGoldenBubbles(dt) {
@@ -1036,10 +1073,12 @@ function updatePullRocks(dt) {
 }
 
 function updateCaughtFishChain(dt) {
+  let yOffset = 64;
   state.caughtFish.forEach((fish, index) => {
     fish.chainIndex = index;
     fish.x += (W / 2 + Math.sin(state.time * 7 + index) * 18 - fish.x) * Math.min(1, dt * 9);
-    fish.y = hookDiveY + 64 + index * 34;
+    fish.y = hookDiveY + yOffset;
+    yOffset += fish.isBoss ? Math.max(82, fish.size * 0.46) : 34;
   });
 }
 
@@ -1047,7 +1086,8 @@ function checkRockHits() {
   if (!state.caughtFish.length) return;
   for (const rock of state.rocks) {
     if (rock.cooldown > 0) continue;
-    if (rock.y < hookDiveY - 35 || rock.y > hookDiveY + 88 + state.caughtFish.length * 34) continue;
+    const nearChain = state.caughtFish.some((fish) => Math.abs(rock.y - (fish.y || hookDiveY)) < 54);
+    if (!nearChain) continue;
     if (Math.abs(rock.x - W / 2) > rock.w * 0.5 + 34) continue;
 
     const dropCount = 1 + Math.floor(Math.random() * state.caughtFish.length);
@@ -1339,9 +1379,22 @@ function finishPull() {
     return;
   }
 
-  const payout = caughtFishPayout();
+  const mysteryFish = state.caughtFish.find((fish) => fish.bossType === "mystery");
+  const payout = caughtFishPayout({ excludeMystery: true });
   state.balance += payout;
   sound.win();
+  if (mysteryFish) {
+    state.pendingMysteryFish = mysteryFish;
+    showResult(
+      "PEARL READY",
+      payout > 0 ? `Catch Banked ${money(payout)}` : "Golden Pearl Clam",
+      `Open the clam to reveal its mystery prize. Other catches paid ${money(payout)}. Total dive cost was ${money(state.spent)}.`,
+      true,
+      "OPEN PEARL"
+    );
+    return;
+  }
+
   showResult(
     "CAUGHT",
     `${state.caughtFish.length} Fish ${money(payout)}`,
@@ -1350,8 +1403,11 @@ function finishPull() {
   );
 }
 
-function caughtFishPayout() {
-  return state.caughtFish.reduce((total, fish) => total + bet() * fish.mult * (fish.valueMultiplier || 1), 0);
+function caughtFishPayout(options = {}) {
+  return state.caughtFish.reduce((total, fish) => {
+    if (options.excludeMystery && fish.bossType === "mystery") return total;
+    return total + bet() * fish.mult * (fish.valueMultiplier || 1);
+  }, 0);
 }
 
 function payoutForCatch(fish) {
@@ -1367,11 +1423,11 @@ function payoutForCatch(fish) {
 
 function resultBodyForCatch(fish, payout) {
   if (fish.bossType === "crimson") {
-    return `Four boss gambles cleared. Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
+    return `Crimson boss catch paid ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
   }
   if (fish.bossType === "octopus") {
     const doubleText = (fish.valueMultiplier || 1) > 1 ? ` Wheel multiplier x${Math.round(fish.valueMultiplier)}.` : "";
-    return `Collector grabbed ${fish.collectorCount || 0} fish.${doubleText} Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
+    return `Collector grabbed ${fish.collectorCount || 0} extra fish.${doubleText} Payout ${money(payout)}. Total dive cost was ${money(state.spent)}.`;
   }
   if (fish.bossType === "mystery") {
     const doubleText = (fish.valueMultiplier || 1) > 1 ? ` Wheel multiplier x${Math.round(fish.valueMultiplier)}.` : "";
