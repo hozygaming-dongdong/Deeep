@@ -47,6 +47,7 @@ const musicVolumeBoost = 1.8;
 const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
+const nopeColor = "#9aa3ad";
 let audioCtx = null;
 let music = null;
 
@@ -2733,7 +2734,7 @@ function drawRoulette() {
   ctx.moveTo(0, 0);
   ctx.arc(0, 0, radius, 0, Math.PI * 2);
   ctx.closePath();
-  ctx.fillStyle = "#2aa866";
+  ctx.fillStyle = nopeColor;
   ctx.fill();
 
   const doubleStart = roulette.mode === "golden" ? 0 : roulette.doubleStart;
@@ -2782,11 +2783,11 @@ function drawRoulette() {
 
   if (roulette.mode === "golden") {
     drawRouletteLegendItem(-45, radius + 35, "#f4c542", "DOUBLE");
-    drawRouletteLegendItem(45, radius + 35, "#2aa866", "NOPE");
+    drawRouletteLegendItem(45, radius + 35, nopeColor, "NOPE");
   } else {
     drawRouletteLegendItem(-82, radius + 35, "#cf344a", "ESCAPE");
     drawRouletteLegendItem(0, radius + 35, "#f4c542", "DOUBLE");
-    drawRouletteLegendItem(82, radius + 35, "#2aa866", "NOPE");
+    drawRouletteLegendItem(82, radius + 35, nopeColor, "NOPE");
   }
 
   if (progress >= 1) {
@@ -2796,7 +2797,7 @@ function drawRoulette() {
         escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
         double: { start: roulette.doubleStart, end: roulette.doubleEnd },
       });
-    ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : visibleOutcome === "DOUBLE" ? "#ffd36a" : "#78e6a3";
+    ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : visibleOutcome === "DOUBLE" ? "#ffd36a" : nopeColor;
     ctx.font = "950 30px Trebuchet MS";
     ctx.fillText(visibleOutcome === "SAFE" ? "NOPE" : visibleOutcome, 0, radius + 78);
   }
@@ -2847,7 +2848,7 @@ function drawBossRoulette(roulette) {
   ctx.moveTo(0, 0);
   ctx.arc(0, 0, radius, 0, Math.PI);
   ctx.closePath();
-  ctx.fillStyle = "#f4c542";
+  ctx.fillStyle = isCrimson ? "#f4c542" : nopeColor;
   ctx.fill();
 
   ctx.strokeStyle = "rgba(255, 246, 218, 0.64)";
@@ -2863,7 +2864,7 @@ function drawBossRoulette(roulette) {
   ctx.fillStyle = "#fff4f4";
   ctx.font = "950 25px Trebuchet MS";
   ctx.fillText("ESCAPE", 0, -42);
-  ctx.fillStyle = "#3b230a";
+  ctx.fillStyle = isCrimson ? "#3b230a" : "#17202a";
   ctx.fillText(safeLabel, 0, 56);
 
   ctx.save();
@@ -2886,11 +2887,11 @@ function drawBossRoulette(roulette) {
   ctx.fill();
 
   drawRouletteLegendItem(-58, radius + 38, "#cf344a", "ESCAPE");
-  drawRouletteLegendItem(58, radius + 38, "#f4c542", safeLabel);
+  drawRouletteLegendItem(58, radius + 38, isCrimson ? "#f4c542" : nopeColor, safeLabel);
 
   if (progress >= 1) {
     const visibleOutcome = bossOutcomeForAngle(roulette.finalPointerAngle);
-    ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : "#ffd36a";
+    ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : isCrimson ? "#ffd36a" : nopeColor;
     ctx.font = "950 34px Trebuchet MS";
     ctx.fillText(visibleOutcome === "DOUBLE" ? safeLabel : visibleOutcome, 0, radius + 82);
   }
