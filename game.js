@@ -48,8 +48,16 @@ const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
 const nopeColor = "#9aa3ad";
-const fishPayoutBoost = 0.75;
+const fishPayoutBoost = 0.45;
 const goldenBubbleHitScale = 2;
+const schoolPayoutTable = {
+  1: 1,
+  2: 2,
+  3: 9,
+  4: 16,
+  5: 25,
+  6: 50,
+};
 let audioCtx = null;
 let music = null;
 
@@ -1411,7 +1419,8 @@ function finishPull() {
   }
 
   const mysteryFish = state.caughtFish.find((fish) => fish.bossType === "mystery");
-  const payout = caughtFishPayout({ excludeMystery: true });
+  const payoutInfo = caughtFishPayoutInfo({ excludeMystery: true });
+  const payout = payoutInfo.total;
   state.balance += payout;
   sound.win();
   if (mysteryFish) {
@@ -1419,7 +1428,7 @@ function finishPull() {
     showResult(
       "PEARL READY",
       payout > 0 ? `Catch Banked ${money(payout)}` : "Golden Pearl Clam",
-      `Open the clam to reveal its mystery prize. Other catches paid ${money(payout)}. Total dive cost was ${money(state.spent)}.`,
+      `Open the clam to reveal its mystery prize. Other catches paid ${money(payout)}. ${schoolBonusText(payoutInfo)} Total dive cost was ${money(state.spent)}.`,
       true,
       "OPEN PEARL"
     );
@@ -1429,16 +1438,62 @@ function finishPull() {
   showResult(
     "CAUGHT",
     `${state.caughtFish.length} Fish ${money(payout)}`,
-    `Payout ${money(payout)} from ${state.caughtFish.length} fish. Total dive cost was ${money(state.spent)}.`,
+    `Payout ${money(payout)} from ${state.caughtFish.length} fish. ${schoolBonusText(payoutInfo)} Total dive cost was ${money(state.spent)}.`,
     true
   );
 }
 
 function caughtFishPayout(options = {}) {
-  return state.caughtFish.reduce((total, fish) => {
-    if (options.excludeMystery && fish.bossType === "mystery") return total;
-    return total + bet() * fish.mult * (fish.valueMultiplier || 1);
-  }, 0);
+  return caughtFishPayoutInfo(options).total;
+}
+
+function caughtFishPayoutInfo(options = {}) {
+  const groups = new Map();
+  let bossTotal = 0;
+
+  for (const fish of state.caughtFish) {
+    if (options.excludeMystery && fish.bossType === "mystery") continue;
+    const singleValue = bet() * fish.mult * (fish.valueMultiplier || 1);
+    if (fish.isBoss) {
+      bossTotal += singleValue;
+      continue;
+    }
+
+    const key = fish.name;
+    const group = groups.get(key) || { name: fish.name, count: 0, singleTotal: 0 };
+    group.count += 1;
+    group.singleTotal += singleValue;
+    groups.set(key, group);
+  }
+
+  const schools = [];
+  let schoolTotal = 0;
+  for (const group of groups.values()) {
+    const cappedCount = Math.min(6, group.count);
+    const multiplier = schoolPayoutTable[cappedCount] || cappedCount;
+    const singleValue = group.singleTotal / group.count;
+    const payout = singleValue * multiplier;
+    schoolTotal += payout;
+    schools.push({ ...group, singleValue, multiplier, payout });
+  }
+
+  schools.sort((a, b) => b.payout - a.payout);
+  return {
+    total: bossTotal + schoolTotal,
+    bossTotal,
+    schoolTotal,
+    schools,
+  };
+}
+
+function schoolBonusText(info) {
+  const hits = info.schools.filter((school) => school.count >= 3).slice(0, 3);
+  const rules = "School rules: 1=1x, 2=2x, 3=9x, 4=16x, 5=25x, 6=50x.";
+  if (!hits.length) return rules;
+  const hitText = hits
+    .map((school) => `${school.count}x ${school.name} = ${money(school.payout)}`)
+    .join(" / ");
+  return `${hitText}. ${rules}`;
 }
 
 function payoutForCatch(fish) {
