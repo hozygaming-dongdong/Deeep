@@ -51,7 +51,7 @@ const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
 const nopeColor = "#9aa3ad";
-const fishPayoutBoost = 0.45;
+const fishPayoutBoost = 0.225;
 const fishSizeScale = 2 / 3;
 const goldenBubbleHitScale = 2;
 const schoolPayoutTable = {
@@ -1005,7 +1005,7 @@ function updatePull(dt) {
   if (state.status !== "pulling") return;
   if (state.roulette) return;
 
-  const pullSpeed = 6.2;
+  const pullSpeed = 4.2;
   const previousDepth = state.depth;
   state.depth = Math.max(0, state.depth - pullSpeed * dt);
   state.hookY = yForDepth(state.depth);
