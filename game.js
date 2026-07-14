@@ -85,6 +85,7 @@ const state = {
   caughtFish: null,
   bestCandidate: null,
   roundBoss: null,
+  seaPattern: null,
   bossOmen: null,
   bossOmenTriggered: false,
   bossOmenTimer: 0,
@@ -120,6 +121,34 @@ const specialCatalog = [
   { name: "Ghost Ray", mult: 375, minDepth: 40, weight: 18, shape: "ray", catchRate: 0.18, holdRate: 0.34, color: "#9ce7ff", accent: "#ffffff", size: 76, rarity: 5, tag: "EPIC" },
   { name: "Crowned Tuna", mult: 600, minDepth: 50, weight: 10, shape: "tuna", catchRate: 0.14, holdRate: 0.28, color: "#f6b84e", accent: "#fff06e", size: 78, rarity: 5, tag: "EPIC" },
   { name: "Abyss Whale", mult: 1200, minDepth: 70, weight: 4, shape: "whale", catchRate: 0.08, holdRate: 0.2, color: "#192334", accent: "#6ff8ff", size: 118, rarity: 6, tag: "LEGENDARY" },
+];
+
+const seaPatterns = [
+  {
+    name: "School Bloom",
+    label: "SCHOOL BLOOM",
+    boosts: { "Blue Sprat": 1.8, "Puffer Pearl": 1.45 },
+    zoneBias: { 1: 1.25, 2: 0.95, 3: 0.8 },
+  },
+  {
+    name: "Shell Run",
+    label: "SHELL RUN",
+    boosts: { "Puffer Pearl": 2, "Golden Shell": 2 },
+    zoneBias: { 1: 1.05, 2: 0.95, 3: 1.15 },
+  },
+  {
+    name: "Red Tide",
+    label: "RED TIDE",
+    boosts: { "Bronze Snapper": 2, "Crimson Bite": 2 },
+    zoneBias: { 1: 0.85, 2: 1.35, 3: 0.95 },
+  },
+  {
+    name: "Abyss Drift",
+    label: "ABYSS DRIFT",
+    boosts: { "Lion Crown": 1.35, "Golden Shell": 1.55, "Abyss King": 1.8 },
+    depthShift: 20,
+    zoneBias: { 1: 0.72, 2: 1.05, 3: 1.32 },
+  },
 ];
 
 const bossCatalog = {
@@ -460,9 +489,38 @@ function pickRouletteLanding(zones) {
 }
 
 function catalogForDepth(depth) {
-  const zone = depth <= 20 ? 1 : depth <= 51 ? 2 : 3;
-  const options = fishCatalog.filter((fish) => fish.zone === zone);
-  return options[Math.floor(Math.random() * options.length)];
+  const currentZone = zoneForDepth(depth);
+  const pattern = state.seaPattern;
+  const weighted = fishCatalog.map((fish) => {
+    const zoneDistance = Math.abs(fish.zone - currentZone);
+    let weight = zoneDistance === 0 ? 1 : zoneDistance === 1 ? 0.22 : 0.08;
+    weight *= pattern?.zoneBias?.[fish.zone] ?? 1;
+    weight *= pattern?.boosts?.[fish.name] ?? 1;
+
+    if (pattern?.depthShift && fish.zone === 3 && depth >= Math.max(1, 52 - pattern.depthShift)) {
+      weight *= 1.9;
+    }
+
+    return { item: fish, weight };
+  });
+
+  return weightedChoice(weighted);
+}
+
+function zoneForDepth(depth) {
+  if (depth <= 20) return 1;
+  if (depth <= 51) return 2;
+  return 3;
+}
+
+function weightedChoice(weightedItems) {
+  const totalWeight = weightedItems.reduce((total, item) => total + item.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const item of weightedItems) {
+    roll -= item.weight;
+    if (roll <= 0) return item.item;
+  }
+  return weightedItems[0]?.item;
 }
 
 function specialChanceForDepth(depth) {
@@ -476,7 +534,8 @@ function specialChanceForDepth(depth) {
 function specialForDepth(depth) {
   if (Math.random() > specialChanceForDepth(depth)) return null;
 
-  const options = specialCatalog.filter((item) => depth >= item.minDepth);
+  const depthShift = state.seaPattern?.name === "Abyss Drift" ? 20 : 0;
+  const options = specialCatalog.filter((item) => depth + depthShift >= item.minDepth);
   const totalWeight = options.reduce((total, item) => total + item.weight, 0);
   let roll = Math.random() * totalWeight;
 
@@ -537,6 +596,10 @@ function chooseRoundBoss() {
   return weights[0].boss;
 }
 
+function chooseSeaPattern() {
+  return seaPatterns[Math.floor(Math.random() * seaPatterns.length)];
+}
+
 function omenForBoss(boss) {
   if (!boss) return null;
   const color = boss.bossType === "octopus" ? "#b86cff" : boss.bossType === "mystery" ? "#ffd36a" : "#ff314f";
@@ -590,6 +653,7 @@ function resetRound() {
   state.goldenBubbles = [];
   state.caughtFish = [];
   state.bestCandidate = null;
+  state.seaPattern = chooseSeaPattern();
   state.roundBoss = chooseRoundBoss();
   state.bossOmen = omenForBoss(state.roundBoss);
   state.bossOmenTriggered = false;
@@ -700,6 +764,9 @@ function updateHud() {
 
   if (schoolRuleBoard) {
     const shouldShowRules = state.status === "ready" || state.status === "finished";
+    const patternLabel = state.seaPattern?.label || "OPEN SEA";
+    const patternText = schoolRuleBoard.querySelector("span");
+    if (patternText) patternText.textContent = patternLabel;
     schoolRuleBoard.classList.toggle("hidden", !shouldShowRules);
   }
 }
