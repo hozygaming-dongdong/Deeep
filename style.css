@@ -126,10 +126,10 @@ canvas {
 .school-rule-board {
   position: absolute;
   z-index: 5;
-  top: 275px;
-  right: 58px;
-  left: 58px;
-  padding: 15px 18px 17px;
+  top: 235px;
+  right: 46px;
+  left: 46px;
+  padding: 20px 34px 24px;
   border: 4px solid #5a3217;
   border-radius: 7px;
   background:
@@ -169,9 +169,9 @@ canvas {
 
 .school-rule-board span {
   display: block;
-  margin: 0 0 7px;
+  margin: 0 0 12px;
   color: #fff0a8;
-  font-size: 17px;
+  font-size: 24px;
   font-weight: 950;
   letter-spacing: 0.08em;
   text-shadow:
@@ -179,13 +179,30 @@ canvas {
     0 0 10px rgba(255, 211, 106, 0.36);
 }
 
-.school-rule-board strong {
-  display: block;
+.school-rule-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.school-rule-list strong {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin: 0;
+  padding: 7px 10px;
+  border: 2px solid rgba(255, 240, 168, 0.28);
+  border-radius: 5px;
+  background: rgba(59, 27, 8, 0.28);
   color: #fff6da;
-  font-size: 20px;
-  line-height: 1.18;
+  font-size: 18px;
+  line-height: 1;
   text-shadow: 0 3px 0 rgba(54, 25, 8, 0.76);
+}
+
+.school-rule-list b {
+  color: #ffd36a;
+  font-size: 21px;
 }
 
 .school-rule-board.hidden {
@@ -639,18 +656,27 @@ strong {
   }
 
   .school-rule-board {
-    top: 248px;
-    right: 18px;
-    left: 18px;
-    padding: 12px 14px 14px;
+    top: 224px;
+    right: 14px;
+    left: 14px;
+    padding: 16px 24px 18px;
   }
 
   .school-rule-board span {
+    font-size: 19px;
+  }
+
+  .school-rule-list {
+    gap: 6px 8px;
+  }
+
+  .school-rule-list strong {
+    padding: 6px 8px;
     font-size: 14px;
   }
 
-  .school-rule-board strong {
-    font-size: 15px;
+  .school-rule-list b {
+    font-size: 16px;
   }
 
   .payout-row {

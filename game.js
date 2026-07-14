@@ -829,10 +829,7 @@ function updateHud() {
     : "-";
 
   if (schoolRuleBoard) {
-    const shouldShowRules = state.status === "ready" || state.status === "finished";
-    const patternLabel = state.seaPattern?.label || "OPEN SEA";
-    const patternText = schoolRuleBoard.querySelector("span");
-    if (patternText) patternText.textContent = patternLabel;
+    const shouldShowRules = state.status === "ready";
     schoolRuleBoard.classList.toggle("hidden", !shouldShowRules);
   }
 }
