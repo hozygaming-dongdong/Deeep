@@ -52,6 +52,7 @@ const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
 const nopeColor = "#9aa3ad";
 const fishPayoutBoost = 0.45;
+const fishSizeScale = 2 / 3;
 const goldenBubbleHitScale = 2;
 const schoolPayoutTable = {
   1: 1,
@@ -623,6 +624,7 @@ function makeFishInstance(item, index, depth, overrides = {}) {
     ...item,
     ...overrides,
     mult: overrides.fixedMult ?? randomizedMult(overrides.mult ?? item.mult),
+    size: (overrides.size ?? item.size) * fishSizeScale,
     isSpecial: Boolean(item.shape),
     isBoss: Boolean(item.isBoss || overrides.isBoss),
     x: overrides.x ?? lanes[index % lanes.length] + Math.random() * 54 - 27,
@@ -1039,7 +1041,7 @@ function updatePull(dt) {
 }
 
 function maxCaughtFish() {
-  return state.caughtFish.some((fish) => fish.bossType === "octopus") ? 8 : 5;
+  return 20;
 }
 
 function makeCatchRoom(fish) {
@@ -1200,7 +1202,7 @@ function updateCaughtFishChain(dt) {
     fish.chainIndex = index;
     fish.x += (W / 2 + Math.sin(state.time * 7 + index) * 18 - fish.x) * Math.min(1, dt * 9);
     fish.y = hookDiveY + yOffset;
-    yOffset += fish.isBoss ? Math.max(82, fish.size * 0.46) : 34;
+    yOffset += fish.isBoss ? Math.max(56, fish.size * 0.46) : 26;
   });
 }
 
