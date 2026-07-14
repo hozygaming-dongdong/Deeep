@@ -23,6 +23,8 @@ const devToggleButton = document.getElementById("devToggleButton");
 const devControls = document.getElementById("devControls");
 const sharkToggle = document.getElementById("sharkToggle");
 const fakePlayersToggle = document.getElementById("fakePlayersToggle");
+const goldenBubbleToggle = document.getElementById("goldenBubbleToggle");
+const schoolRuleBoard = document.getElementById("schoolRuleBoard");
 const crimsonChanceSlider = document.getElementById("crimsonChanceSlider");
 const crimsonChanceText = document.getElementById("crimsonChanceText");
 const octopusChanceSlider = document.getElementById("octopusChanceSlider");
@@ -70,6 +72,7 @@ const state = {
   isHolding: false,
   sharksEnabled: false,
   fakePlayersEnabled: false,
+  goldenBubblesEnabled: false,
   lastTickDepth: 0,
   hookY: hookDiveY,
   messageTimer: 0,
@@ -577,6 +580,7 @@ function resetRound() {
   state.isHolding = false;
   state.sharksEnabled = sharkToggle ? sharkToggle.checked : state.sharksEnabled;
   state.fakePlayersEnabled = fakePlayersToggle ? fakePlayersToggle.checked : state.fakePlayersEnabled;
+  state.goldenBubblesEnabled = goldenBubbleToggle ? goldenBubbleToggle.checked : state.goldenBubblesEnabled;
   state.lastTickDepth = 0;
   state.hookY = hookDiveY;
   state.messageTimer = 0;
@@ -604,7 +608,7 @@ function resetRound() {
   state.fakePlayers = makeFakePlayers();
   state.fakeEvents = [];
   state.fish = makeFish();
-  state.goldenBubbles = makeGoldenBubbles();
+  state.goldenBubbles = state.goldenBubblesEnabled ? makeGoldenBubbles() : [];
   resultPanel.classList.add("hidden");
   newRoundButton.textContent = "NEW ROUND";
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
@@ -616,7 +620,7 @@ function resetRound() {
 function makeFish() {
   const fish = [];
 
-  for (let depth = 1.2; depth < maxDepth; depth += 1.05 + Math.random() * 0.9) {
+  for (let depth = 1.2; depth < maxDepth; depth += 0.52 + Math.random() * 0.45) {
     const item = specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
     fish.push(makeFishInstance(item, index, depth));
@@ -693,6 +697,11 @@ function updateHud() {
     : state.bestCandidate
     ? `${state.bestCandidate.name} ${fishValue(state.bestCandidate)}`
     : "-";
+
+  if (schoolRuleBoard) {
+    const shouldShowRules = state.status === "ready" || state.status === "finished";
+    schoolRuleBoard.classList.toggle("hidden", !shouldShowRules);
+  }
 }
 
 function refillBalanceForDev() {
@@ -976,6 +985,7 @@ function makeCatchRoom(fish) {
 }
 
 function maybeTriggerGoldenBubble(previousDepth) {
+  if (!state.goldenBubblesEnabled) return;
   if (state.roulette) return;
   for (const bubble of state.goldenBubbles) {
     if (bubble.triggered) continue;
@@ -1022,6 +1032,7 @@ function updateOctopusCollector(dt) {
 }
 
 function updateGoldenBubbles(dt) {
+  if (!state.goldenBubblesEnabled) return;
   const surgeActive = state.status === "shuffle" && state.pullSurgeTimer > 0;
   for (const bubble of state.goldenBubbles) {
     if (bubble.triggered) continue;
@@ -1428,7 +1439,7 @@ function finishPull() {
     showResult(
       "PEARL READY",
       payout > 0 ? `Catch Banked ${money(payout)}` : "Golden Pearl Clam",
-      `Open the clam to reveal its mystery prize. Other catches paid ${money(payout)}. ${schoolBonusText(payoutInfo)} Total dive cost was ${money(state.spent)}.`,
+      `Open the clam to reveal its mystery prize. ${payoutSummaryText(payoutInfo)} Cost ${money(state.spent)}.`,
       true,
       "OPEN PEARL"
     );
@@ -1438,7 +1449,7 @@ function finishPull() {
   showResult(
     "CAUGHT",
     `${state.caughtFish.length} Fish ${money(payout)}`,
-    `Payout ${money(payout)} from ${state.caughtFish.length} fish. ${schoolBonusText(payoutInfo)} Total dive cost was ${money(state.spent)}.`,
+    `${payoutSummaryText(payoutInfo)} Cost ${money(state.spent)}.`,
     true
   );
 }
@@ -1450,6 +1461,7 @@ function caughtFishPayout(options = {}) {
 function caughtFishPayoutInfo(options = {}) {
   const groups = new Map();
   let bossTotal = 0;
+  let rawFishTotal = 0;
 
   for (const fish of state.caughtFish) {
     if (options.excludeMystery && fish.bossType === "mystery") continue;
@@ -1459,6 +1471,7 @@ function caughtFishPayoutInfo(options = {}) {
       continue;
     }
 
+    rawFishTotal += singleValue;
     const key = fish.name;
     const group = groups.get(key) || { name: fish.name, count: 0, singleTotal: 0 };
     group.count += 1;
@@ -1480,20 +1493,23 @@ function caughtFishPayoutInfo(options = {}) {
   schools.sort((a, b) => b.payout - a.payout);
   return {
     total: bossTotal + schoolTotal,
+    rawFishTotal,
+    schoolBonus: Math.max(0, schoolTotal - rawFishTotal),
     bossTotal,
     schoolTotal,
     schools,
   };
 }
 
-function schoolBonusText(info) {
+function payoutSummaryText(info) {
   const hits = info.schools.filter((school) => school.count >= 3).slice(0, 3);
-  const rules = "School rules: 1=1x, 2=2x, 3=9x, 4=16x, 5=25x, 6=50x.";
-  if (!hits.length) return rules;
-  const hitText = hits
+  const hitText = hits.length
+    ? hits
     .map((school) => `${school.count}x ${school.name} = ${money(school.payout)}`)
-    .join(" / ");
-  return `${hitText}. ${rules}`;
+    .join(" / ")
+    : "No school bonus";
+  const bossText = info.bossTotal > 0 ? ` Boss ${money(info.bossTotal)}.` : "";
+  return `Base ${money(info.rawFishTotal)} + School Bonus ${money(info.schoolBonus)}.${bossText} ${hitText}. Total ${money(info.total)}.`;
 }
 
 function payoutForCatch(fish) {
@@ -2051,6 +2067,7 @@ function drawBubbles() {
 }
 
 function drawGoldenBubbles() {
+  if (!state.goldenBubblesEnabled) return;
   ctx.save();
   for (const bubble of state.goldenBubbles) {
     if (bubble.triggered) continue;
@@ -3197,6 +3214,13 @@ if (fakePlayersToggle) {
   fakePlayersToggle.addEventListener("change", () => {
     state.fakePlayersEnabled = fakePlayersToggle.checked;
     if (!state.fakePlayersEnabled) state.fakeEvents = [];
+  });
+}
+if (goldenBubbleToggle) {
+  goldenBubbleToggle.addEventListener("change", () => {
+    state.goldenBubblesEnabled = goldenBubbleToggle.checked;
+    if (!state.goldenBubblesEnabled) state.goldenBubbles = [];
+    if (state.status === "ready") resetRound();
   });
 }
 if (devToggleButton && devControls) {

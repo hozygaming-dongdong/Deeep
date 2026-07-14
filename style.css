@@ -155,6 +155,10 @@ canvas {
   line-height: 1;
 }
 
+.school-rule-board.hidden {
+  display: none;
+}
+
 .dev-panel {
   position: absolute;
   z-index: 6;
