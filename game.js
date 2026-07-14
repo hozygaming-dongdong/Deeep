@@ -57,10 +57,11 @@ const goldenBubbleHitScale = 2;
 const schoolPayoutTable = {
   1: 1,
   2: 2,
-  3: 9,
-  4: 16,
-  5: 25,
-  6: 50,
+  3: 5,
+  4: 10,
+  5: 15,
+  6: 30,
+  7: 50,
 };
 let audioCtx = null;
 let music = null;
@@ -1679,7 +1680,7 @@ function caughtFishPayoutInfo(options = {}) {
   const schools = [];
   let schoolTotal = 0;
   for (const group of groups.values()) {
-    const cappedCount = Math.min(6, group.count);
+    const cappedCount = Math.min(7, group.count);
     const multiplier = schoolPayoutTable[cappedCount] || cappedCount;
     const singleValue = group.singleTotal / group.count;
     const payout = singleValue * multiplier;

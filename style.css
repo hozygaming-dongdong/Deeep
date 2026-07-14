@@ -126,40 +126,66 @@ canvas {
 .school-rule-board {
   position: absolute;
   z-index: 5;
-  right: 22px;
-  bottom: 190px;
-  left: 22px;
-  padding: 11px 12px;
-  border: 3px solid rgba(255, 211, 106, 0.82);
-  border-radius: 8px;
+  top: 275px;
+  right: 58px;
+  left: 58px;
+  padding: 15px 18px 17px;
+  border: 4px solid #5a3217;
+  border-radius: 7px;
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 211, 106, 0.2), transparent 58%),
-    rgba(7, 22, 34, 0.86);
+    linear-gradient(90deg, rgba(68, 35, 15, 0.35), rgba(255, 226, 146, 0.14), rgba(68, 35, 15, 0.32)),
+    repeating-linear-gradient(0deg, #8a5327 0 13px, #78451f 13px 25px);
   color: #fff6da;
   text-align: center;
   pointer-events: none;
   box-shadow:
-    0 0 24px rgba(255, 211, 106, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    0 10px 0 rgba(43, 22, 10, 0.82),
+    0 20px 32px rgba(0, 0, 0, 0.42),
+    inset 0 3px 0 rgba(255, 236, 167, 0.32),
+    inset 0 -5px 0 rgba(55, 26, 10, 0.36);
+  transform: rotate(-1.2deg);
+}
+
+.school-rule-board::before,
+.school-rule-board::after {
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff0a8, #b77929 42%, #4b260d 74%);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.38);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.school-rule-board::before {
+  left: 14px;
+}
+
+.school-rule-board::after {
+  right: 14px;
 }
 
 .school-rule-board span {
   display: block;
-  margin: 0 0 5px;
-  color: #ffd36a;
-  font-size: 15px;
+  margin: 0 0 7px;
+  color: #fff0a8;
+  font-size: 17px;
   font-weight: 950;
   letter-spacing: 0.08em;
-  text-shadow: 0 0 10px rgba(255, 211, 106, 0.4);
+  text-shadow:
+    0 2px 0 rgba(54, 25, 8, 0.8),
+    0 0 10px rgba(255, 211, 106, 0.36);
 }
 
 .school-rule-board strong {
   display: block;
   margin: 0;
   color: #fff6da;
-  font-size: 18px;
-  line-height: 1;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.42);
+  font-size: 20px;
+  line-height: 1.18;
+  text-shadow: 0 3px 0 rgba(54, 25, 8, 0.76);
 }
 
 .school-rule-board.hidden {
@@ -613,18 +639,18 @@ strong {
   }
 
   .school-rule-board {
-    right: 12px;
-    bottom: 184px;
-    left: 12px;
-    padding: 9px 8px;
+    top: 248px;
+    right: 18px;
+    left: 18px;
+    padding: 12px 14px 14px;
   }
 
   .school-rule-board span {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .school-rule-board strong {
-    font-size: 14px;
+    font-size: 15px;
   }
 
   .payout-row {
