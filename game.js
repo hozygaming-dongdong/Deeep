@@ -12,6 +12,7 @@ const resultPanel = document.getElementById("resultPanel");
 const resultKicker = document.getElementById("resultKicker");
 const resultTitle = document.getElementById("resultTitle");
 const resultBody = document.getElementById("resultBody");
+const resultBreakdown = document.getElementById("resultBreakdown");
 const bossOmenOverlay = document.getElementById("bossOmenOverlay");
 const bossOmenTitle = document.getElementById("bossOmenTitle");
 const newRoundButton = document.getElementById("newRoundButton");
@@ -674,6 +675,10 @@ function resetRound() {
   state.fish = makeFish();
   state.goldenBubbles = state.goldenBubblesEnabled ? makeGoldenBubbles() : [];
   resultPanel.classList.add("hidden");
+  if (resultBreakdown) {
+    resultBreakdown.innerHTML = "";
+    resultBreakdown.classList.add("hidden");
+  }
   newRoundButton.textContent = "NEW ROUND";
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = state.balance < bet();
@@ -1506,9 +1511,10 @@ function finishPull() {
     showResult(
       "PEARL READY",
       payout > 0 ? `Catch Banked ${money(payout)}` : "Golden Pearl Clam",
-      `Open the clam to reveal its mystery prize. ${payoutSummaryText(payoutInfo)} Cost ${money(state.spent)}.`,
+      `Open the clam to reveal its mystery prize. Total ${money(payout)} before pearl.`,
       true,
-      "OPEN PEARL"
+      "OPEN PEARL",
+      buildPayoutBreakdown(payoutInfo)
     );
     return;
   }
@@ -1516,8 +1522,10 @@ function finishPull() {
   showResult(
     "CAUGHT",
     `${state.caughtFish.length} Fish ${money(payout)}`,
-    `${payoutSummaryText(payoutInfo)} Cost ${money(state.spent)}.`,
-    true
+    `Total payout ${money(payout)}. Cost ${money(state.spent)}.`,
+    true,
+    "NEW ROUND",
+    buildPayoutBreakdown(payoutInfo)
   );
 }
 
@@ -1579,6 +1587,57 @@ function payoutSummaryText(info) {
   return `Base ${money(info.rawFishTotal)} + School Bonus ${money(info.schoolBonus)}.${bossText} ${hitText}. Total ${money(info.total)}.`;
 }
 
+function buildPayoutBreakdown(info) {
+  const rows = info.schools.slice(0, 6).map((school) => {
+    const color = school.count >= 3 ? "#ffd36a" : "#9aa3ad";
+    const kindText = school.count === 1 ? "SINGLE" : `${school.count} OF A KIND`;
+    const icon = fishIconHtml(school.name);
+    return `
+      <div class="payout-row">
+        ${icon}
+        <div class="payout-kind">
+          <strong>${kindText}</strong>
+          <span>${school.name}</span>
+        </div>
+        <div class="payout-mult" style="--row-color:${color}">${school.multiplier}x</div>
+        <div class="payout-money">${money(school.payout)}</div>
+      </div>
+    `;
+  });
+
+  if (info.bossTotal > 0) {
+    rows.push(`
+      <div class="payout-row payout-row-boss">
+        <span class="fish-icon fish-icon-boss"></span>
+        <div class="payout-kind">
+          <strong>BOSS</strong>
+          <span>Boss catch</span>
+        </div>
+        <div class="payout-mult" style="--row-color:#ff6b7b">-</div>
+        <div class="payout-money">${money(info.bossTotal)}</div>
+      </div>
+    `);
+  }
+
+  rows.push(`
+    <div class="payout-total-row">
+      <span>Base ${money(info.rawFishTotal)}</span>
+      <span>School Bonus ${money(info.schoolBonus)}</span>
+      <strong>Total ${money(info.total)}</strong>
+    </div>
+  `);
+
+  return rows.join("");
+}
+
+function fishIconHtml(name) {
+  const fish = fishCatalog.find((item) => item.name === name)
+    || specialCatalog.find((item) => item.name === name);
+  const color = fish?.color || "#65c9ff";
+  const accent = fish?.accent || "#d6f5ff";
+  return `<span class="fish-icon" style="--fish-color:${color};--fish-accent:${accent}"></span>`;
+}
+
 function payoutForCatch(fish) {
   if (fish.bossType === "octopus") {
     return bet() * (fish.mult + (fish.collectorBonusMult || 0)) * (fish.valueMultiplier || 1);
@@ -1631,12 +1690,16 @@ function openMysteryClam() {
   return true;
 }
 
-function showResult(kicker, title, body, canRestart, buttonText = "NEW ROUND") {
+function showResult(kicker, title, body, canRestart, buttonText = "NEW ROUND", breakdownHtml = "") {
   state.status = "finished";
   state.isHolding = false;
   resultKicker.textContent = kicker;
   resultTitle.textContent = title;
   resultBody.textContent = body;
+  if (resultBreakdown) {
+    resultBreakdown.innerHTML = breakdownHtml;
+    resultBreakdown.classList.toggle("hidden", !breakdownHtml);
+  }
   resultPanel.classList.remove("hidden");
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.classList.remove("is-held");

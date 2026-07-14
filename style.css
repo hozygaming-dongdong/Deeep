@@ -337,6 +337,115 @@ strong {
   display: none;
 }
 
+.result-breakdown {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 16px;
+  text-align: left;
+}
+
+.result-breakdown.hidden {
+  display: none;
+}
+
+.payout-row {
+  display: grid;
+  grid-template-columns: 42px 1fr 52px 82px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 239, 175, 0.18);
+  border-radius: 8px;
+  background: rgba(4, 16, 27, 0.54);
+}
+
+.fish-icon {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 22px;
+  border: 2px solid rgba(255, 246, 218, 0.48);
+  border-radius: 50%;
+  background: linear-gradient(90deg, var(--fish-color, #65c9ff), var(--fish-accent, #d6f5ff));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--fish-accent, #d6f5ff) 42%, transparent);
+}
+
+.fish-icon::before {
+  position: absolute;
+  top: 4px;
+  left: -11px;
+  width: 14px;
+  height: 14px;
+  background: var(--fish-color, #65c9ff);
+  clip-path: polygon(100% 50%, 0 0, 0 100%);
+  content: "";
+}
+
+.fish-icon::after {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #111;
+  content: "";
+}
+
+.fish-icon-boss {
+  --fish-color: #ff314f;
+  --fish-accent: #ffd36a;
+  width: 38px;
+  height: 26px;
+}
+
+.payout-kind strong {
+  display: block;
+  margin: 0;
+  color: #fff6da;
+  font-size: 14px;
+  line-height: 1.05;
+}
+
+.payout-kind span {
+  color: #a9d8eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.payout-mult {
+  color: var(--row-color, #ffd36a);
+  font-size: 20px;
+  font-weight: 950;
+  text-align: center;
+}
+
+.payout-money {
+  color: #fff6da;
+  font-size: 17px;
+  font-weight: 950;
+  text-align: right;
+}
+
+.payout-total-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  padding-top: 2px;
+  color: #a9d8eb;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.payout-total-row strong {
+  display: inline;
+  margin: 0;
+  color: #ffd36a;
+  font-size: 15px;
+}
+
 .boss-omen-overlay {
   position: absolute;
   z-index: 7;
@@ -468,5 +577,39 @@ strong {
 
   .deep-button {
     height: 76px;
+  }
+
+  .payout-row {
+    grid-template-columns: 34px 1fr 42px 66px;
+    gap: 6px;
+    padding: 7px 8px;
+  }
+
+  .fish-icon {
+    width: 28px;
+    height: 18px;
+  }
+
+  .fish-icon::before {
+    top: 3px;
+    left: -9px;
+    width: 12px;
+    height: 12px;
+  }
+
+  .payout-kind strong {
+    font-size: 12px;
+  }
+
+  .payout-kind span {
+    font-size: 11px;
+  }
+
+  .payout-mult {
+    font-size: 17px;
+  }
+
+  .payout-money {
+    font-size: 14px;
   }
 }
