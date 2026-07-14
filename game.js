@@ -51,7 +51,7 @@ const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
 const nopeColor = "#9aa3ad";
-const fishPayoutBoost = 0.225;
+const fishPayoutBoost = 0.45;
 const fishSizeScale = 2 / 3;
 const goldenBubbleHitScale = 2;
 const schoolPayoutTable = {
@@ -1000,8 +1000,8 @@ function pauseForSharkCheck(depth) {
 
 function resolveSharkCheck() {
   if (!state.sharkCheck || state.sharkCheck.resolved) return;
-  const biteLane = Math.floor(Math.random() * 7);
-  const hit = biteLane === 3;
+  const biteLane = Math.floor(Math.random() * 5);
+  const hit = biteLane === 2;
   state.sharkCheck.biteLane = biteLane;
   state.sharkCheck.hit = hit;
   state.sharkCheck.timer = 0.85;
@@ -3287,7 +3287,7 @@ function drawShark() {
 function drawSharkCheck() {
   if (state.status !== "shark-check" || !state.sharkCheck) return;
   const check = state.sharkCheck;
-  const laneCount = 7;
+  const laneCount = 5;
   const gap = 6;
   const laneW = 74;
   const laneH = 54;
@@ -3311,11 +3311,11 @@ function drawSharkCheck() {
   ctx.fillText(`${Math.floor(check.depth)}F SAW SHARK CHECK`, W / 2, y - 72);
   ctx.font = "850 15px Trebuchet MS";
   ctx.fillStyle = "#ff9aa7";
-  ctx.fillText(check.resolved ? "WATCH THE BITE" : "PRESS RED GO DEEP TO RISK 1/7", W / 2, y + 90);
+  ctx.fillText(check.resolved ? "WATCH THE BITE" : "PRESS RED GO DEEP TO RISK 1/5", W / 2, y + 90);
 
   for (let i = 0; i < laneCount; i += 1) {
     const x = startX + i * (laneW + gap);
-    const isLine = i === 3;
+    const isLine = i === 2;
     const isBite = check.biteLane === i;
     ctx.fillStyle = isBite ? "#ff314f" : isLine ? "rgba(255, 211, 106, 0.26)" : "rgba(255, 255, 255, 0.1)";
     ctx.strokeStyle = isLine ? "#ffd36a" : "#ff6b7b";
