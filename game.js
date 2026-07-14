@@ -84,6 +84,8 @@ const state = {
   rocks: [],
   goldenBubbles: [],
   shark: null,
+  sharkCheck: null,
+  nextSharkCheckDepth: 10,
   caughtFish: null,
   bestCandidate: null,
   roundBoss: null,
@@ -324,7 +326,7 @@ function updateMusic() {
 
   const now = audioCtx.currentTime;
   const depthRatio = Math.min(1, state.depth / maxDepth);
-  const active = state.status === "diving" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut";
+  const active = state.status === "diving" || state.status === "shark-check" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut";
   const masterTarget = Math.min(0.78, (active ? 0.24 + depthRatio * 0.1 : 0.105) * musicVolumeBoost);
   const pulseTarget = active ? 0.022 + depthRatio * 0.045 : 0.004;
   const tensionTarget = depthRatio > 0.45 ? (depthRatio - 0.45) * 0.045 : 0.0001;
@@ -651,6 +653,8 @@ function resetRound() {
   state.hookY = hookDiveY;
   state.messageTimer = 0;
   state.shark = null;
+  state.sharkCheck = null;
+  state.nextSharkCheckDepth = 10;
   state.effects = [];
   state.rocks = [];
   state.goldenBubbles = [];
@@ -677,6 +681,7 @@ function resetRound() {
   state.fish = makeFish();
   state.goldenBubbles = state.goldenBubblesEnabled ? makeGoldenBubbles() : [];
   resultPanel.classList.add("hidden");
+  deepButton.classList.remove("is-risk", "is-held");
   if (resultBreakdown) {
     resultBreakdown.innerHTML = "";
     resultBreakdown.classList.add("hidden");
@@ -789,6 +794,11 @@ function refillBalanceForDev() {
 function beginDive() {
   ensureAudio();
   ensureMusic();
+  if (state.status === "shark-check") {
+    resolveSharkCheck();
+    return;
+  }
+
   if (state.status === "ready") {
     if (state.balance < bet()) {
       showResult("NO BALANCE", "Need More Balance", "Lower the bet or start again with enough balance.", true);
@@ -846,6 +856,7 @@ function startPull() {
   ensureMusic();
   state.status = "shuffle";
   state.isHolding = false;
+  state.sharkCheck = null;
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
   state.pullStartDepth = state.depth;
@@ -856,6 +867,7 @@ function startPull() {
   state.rocks = [];
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
   deepButton.disabled = true;
+  deepButton.classList.remove("is-risk", "is-held");
   pullButton.disabled = true;
   sound.pull();
 }
@@ -940,9 +952,8 @@ function sinkStep(dt) {
     state.balance -= bet();
     sound.tick();
 
-    const risk = riskForDepth(state.lastTickDepth);
-    if (state.sharksEnabled && Math.random() < risk.rate) {
-      triggerShark();
+    if (state.sharksEnabled && state.lastTickDepth >= state.nextSharkCheckDepth && state.lastTickDepth < maxDepth) {
+      pauseForSharkCheck(state.nextSharkCheckDepth);
       return;
     }
 
@@ -967,10 +978,60 @@ function pauseAtBottom() {
   pullButton.disabled = false;
 }
 
+function pauseForSharkCheck(depth) {
+  state.status = "shark-check";
+  state.isHolding = false;
+  state.depth = depth;
+  state.hookY = yForDepth(state.depth);
+  state.nextSharkCheckDepth = depth + 10;
+  state.sharkCheck = {
+    depth,
+    biteLane: null,
+    hit: false,
+    timer: 0,
+    resolved: false,
+  };
+  deepButton.classList.remove("is-held");
+  deepButton.classList.add("is-risk");
+  deepButton.disabled = false;
+  pullButton.disabled = false;
+  sound.safe();
+}
+
+function resolveSharkCheck() {
+  if (!state.sharkCheck || state.sharkCheck.resolved) return;
+  const biteLane = Math.floor(Math.random() * 7);
+  const hit = biteLane === 3;
+  state.sharkCheck.biteLane = biteLane;
+  state.sharkCheck.hit = hit;
+  state.sharkCheck.timer = 0.85;
+  state.sharkCheck.resolved = true;
+  deepButton.disabled = true;
+  pullButton.disabled = true;
+  sound.shark();
+}
+
+function finishSharkCheck() {
+  if (!state.sharkCheck) return;
+  const hit = state.sharkCheck.hit;
+  if (hit) {
+    triggerShark();
+    return;
+  }
+
+  state.status = "diving";
+  state.isHolding = false;
+  state.sharkCheck = null;
+  deepButton.classList.remove("is-risk", "is-held");
+  deepButton.disabled = state.balance < bet();
+  pullButton.disabled = false;
+  sound.safe();
+}
+
 function triggerShark() {
   state.status = "cut";
   state.isHolding = false;
-  deepButton.classList.remove("is-held");
+  deepButton.classList.remove("is-held", "is-risk");
   deepButton.disabled = true;
   pullButton.disabled = true;
   state.shark = {
@@ -999,6 +1060,12 @@ function updatePullShuffle(dt) {
   if (state.pullShuffleTimer <= 0) {
     finishPullShuffle();
   }
+}
+
+function updateSharkCheck(dt) {
+  if (state.status !== "shark-check" || !state.sharkCheck?.resolved) return;
+  state.sharkCheck.timer = Math.max(0, state.sharkCheck.timer - dt);
+  if (state.sharkCheck.timer <= 0) finishSharkCheck();
 }
 
 function updatePull(dt) {
@@ -1704,7 +1771,7 @@ function showResult(kicker, title, body, canRestart, buttonText = "NEW ROUND", b
   }
   resultPanel.classList.remove("hidden");
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
-  deepButton.classList.remove("is-held");
+  deepButton.classList.remove("is-held", "is-risk");
   deepButton.disabled = true;
   pullButton.disabled = true;
   newRoundButton.disabled = !canRestart;
@@ -3217,6 +3284,83 @@ function drawShark() {
   ctx.restore();
 }
 
+function drawSharkCheck() {
+  if (state.status !== "shark-check" || !state.sharkCheck) return;
+  const check = state.sharkCheck;
+  const laneCount = 7;
+  const gap = 6;
+  const laneW = 74;
+  const laneH = 54;
+  const totalW = laneCount * laneW + (laneCount - 1) * gap;
+  const startX = W / 2 - totalW / 2;
+  const y = hookDiveY - 18;
+
+  ctx.save();
+  ctx.globalAlpha = 0.98;
+  ctx.fillStyle = "rgba(29, 4, 13, 0.82)";
+  ctx.strokeStyle = "#ff314f";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(startX - 16, y - 50, totalW + 32, laneH + 100, 12);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff6da";
+  ctx.font = "950 25px Trebuchet MS";
+  ctx.fillText(`${Math.floor(check.depth)}F SAW SHARK CHECK`, W / 2, y - 72);
+  ctx.font = "850 15px Trebuchet MS";
+  ctx.fillStyle = "#ff9aa7";
+  ctx.fillText(check.resolved ? "WATCH THE BITE" : "PRESS RED GO DEEP TO RISK 1/7", W / 2, y + 90);
+
+  for (let i = 0; i < laneCount; i += 1) {
+    const x = startX + i * (laneW + gap);
+    const isLine = i === 3;
+    const isBite = check.biteLane === i;
+    ctx.fillStyle = isBite ? "#ff314f" : isLine ? "rgba(255, 211, 106, 0.26)" : "rgba(255, 255, 255, 0.1)";
+    ctx.strokeStyle = isLine ? "#ffd36a" : "#ff6b7b";
+    ctx.lineWidth = isLine ? 4 : 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y - laneH / 2, laneW, laneH, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    if (isBite) {
+      drawSharkMouth(x + laneW / 2, y, check.hit);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawSharkMouth(x, y, hit) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = hit ? "#25020a" : "#36131c";
+  ctx.strokeStyle = hit ? "#fff1a8" : "#ffd1d6";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 28, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  for (let i = -2; i <= 2; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(i * 9, -18);
+    ctx.lineTo(i * 9 + 5, -4);
+    ctx.lineTo(i * 9 + 10, -18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(i * 9, 18);
+    ctx.lineTo(i * 9 + 5, 4);
+    ctx.lineTo(i * 9 + 10, 18);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawFakeEvents() {
   if (!state.fakePlayersEnabled || state.fakeEvents.length === 0) return;
   ctx.save();
@@ -3252,6 +3396,7 @@ function render() {
   drawPullRocks();
   drawHook();
   drawShark();
+  drawSharkCheck();
   drawEffects();
   drawFakeEvents();
   drawDepthShade(Math.min(1, state.depth / maxDepth));
@@ -3278,6 +3423,7 @@ function frame(now) {
 
   sinkStep(dt);
   updatePullShuffle(dt);
+  updateSharkCheck(dt);
   updateRoulette(dt);
   updateGoldenBubbles(dt);
   updatePull(dt);
@@ -3294,7 +3440,7 @@ function frame(now) {
 }
 
 function changeBet(delta) {
-  if (state.status === "diving" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut") return;
+  if (state.status === "diving" || state.status === "shark-check" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut") return;
   state.betIndex = Math.max(0, Math.min(betSteps.length - 1, state.betIndex + delta));
   deepButton.disabled = state.balance < bet();
   updateHud();
