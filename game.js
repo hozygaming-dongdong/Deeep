@@ -520,7 +520,7 @@ function makeFishTides() {
   while (tides.length < count && guard < 30) {
     guard += 1;
     const start = 8 + Math.random() * 78;
-    const length = 2 + Math.floor(Math.random() * 4);
+    const length = 3 + Math.floor(Math.random() * 8);
     const end = Math.min(maxDepth - 6, start + length);
     if (tides.some((tide) => start < tide.end + 6 && end > tide.start - 6)) continue;
 
@@ -529,7 +529,6 @@ function makeFishTides() {
       start,
       end,
       item,
-      label: `${item.name.toUpperCase()} TIDE`,
       phase: Math.random() * TAU,
     });
   }
@@ -744,12 +743,15 @@ function makeFish() {
     const index = fish.length;
     fish.push(makeFishInstance(item, index, depth));
 
-    if (tide && Math.random() < 0.9) {
-      fish.push(makeFishInstance(item, fish.length, Math.min(tide.end, depth + Math.random() * 0.35), {
-        x: 80 + Math.random() * (W - 160),
-        dir: Math.random() < 0.5 ? -1 : 1,
-        speed: 0.72 + Math.random() * 0.5,
-      }));
+    if (tide) {
+      const extraCount = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < extraCount; i += 1) {
+        fish.push(makeFishInstance(item, fish.length, Math.min(tide.end, depth + Math.random() * 0.5), {
+          x: 80 + Math.random() * (W - 160),
+          dir: Math.random() < 0.5 ? -1 : 1,
+          speed: 0.78 + Math.random() * 0.62,
+        }));
+      }
     }
   }
 
@@ -3444,13 +3446,6 @@ function drawFishTides() {
       ctx.stroke();
     }
 
-    ctx.textAlign = "center";
-    ctx.font = "900 20px Trebuchet MS";
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = "rgba(7, 18, 28, 0.78)";
-    ctx.fillStyle = color;
-    ctx.strokeText(tide.label, W / 2, y - height / 2 + 28);
-    ctx.fillText(tide.label, W / 2, y - height / 2 + 28);
   }
   ctx.restore();
 }
