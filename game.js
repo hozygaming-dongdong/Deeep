@@ -83,6 +83,7 @@ const state = {
   fish: [],
   rocks: [],
   goldenBubbles: [],
+  fishTides: [],
   shark: null,
   sharkCheck: null,
   nextSharkCheckDepth: 20,
@@ -511,6 +512,35 @@ function catalogForDepth(depth) {
   return weightedChoice(weighted);
 }
 
+function makeFishTides() {
+  const tides = [];
+  const count = 2 + Math.floor(Math.random() * 2);
+  let guard = 0;
+
+  while (tides.length < count && guard < 30) {
+    guard += 1;
+    const start = 8 + Math.random() * 78;
+    const length = 2 + Math.floor(Math.random() * 4);
+    const end = Math.min(maxDepth - 6, start + length);
+    if (tides.some((tide) => start < tide.end + 6 && end > tide.start - 6)) continue;
+
+    const item = catalogForDepth(start + length / 2);
+    tides.push({
+      start,
+      end,
+      item,
+      label: `${item.name.toUpperCase()} TIDE`,
+      phase: Math.random() * TAU,
+    });
+  }
+
+  return tides.sort((a, b) => a.start - b.start);
+}
+
+function fishTideForDepth(depth) {
+  return state.fishTides.find((tide) => depth >= tide.start && depth <= tide.end);
+}
+
 function zoneForDepth(depth) {
   if (depth <= 20) return 1;
   if (depth <= 51) return 2;
@@ -525,6 +555,17 @@ function weightedChoice(weightedItems) {
     if (roll <= 0) return item.item;
   }
   return weightedItems[0]?.item;
+}
+
+function rgbaFromHex(hex, alpha) {
+  const clean = hex.replace("#", "");
+  const value = Number.parseInt(clean.length === 3
+    ? clean.split("").map((part) => part + part).join("")
+    : clean, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function specialChanceForDepth(depth) {
@@ -657,10 +698,11 @@ function resetRound() {
   state.nextSharkCheckDepth = 20;
   state.effects = [];
   state.rocks = [];
+  state.seaPattern = chooseSeaPattern();
+  state.fishTides = makeFishTides();
   state.goldenBubbles = [];
   state.caughtFish = [];
   state.bestCandidate = null;
-  state.seaPattern = chooseSeaPattern();
   state.roundBoss = chooseRoundBoss();
   state.bossOmen = omenForBoss(state.roundBoss);
   state.bossOmenTriggered = false;
@@ -697,9 +739,18 @@ function makeFish() {
   const fish = [];
 
   for (let depth = 1.2; depth < maxDepth; depth += 0.52 + Math.random() * 0.45) {
-    const item = specialForDepth(depth) || catalogForDepth(depth);
+    const tide = fishTideForDepth(depth);
+    const item = tide ? tide.item : specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
     fish.push(makeFishInstance(item, index, depth));
+
+    if (tide && Math.random() < 0.9) {
+      fish.push(makeFishInstance(item, fish.length, Math.min(tide.end, depth + Math.random() * 0.35), {
+        x: 80 + Math.random() * (W - 160),
+        dir: Math.random() < 0.5 ? -1 : 1,
+        speed: 0.72 + Math.random() * 0.5,
+      }));
+    }
   }
 
   const boss = state.roundBoss;
@@ -3361,6 +3412,49 @@ function drawSharkMouth(x, y, hit) {
   ctx.restore();
 }
 
+function drawFishTides() {
+  if (!state.fishTides.length) return;
+
+  ctx.save();
+  for (const tide of state.fishTides) {
+    const top = yForDepth(tide.start);
+    const bottom = yForDepth(tide.end);
+    if (bottom < -80 || top > H + 80) continue;
+
+    const y = (top + bottom) / 2;
+    const height = Math.max(62, bottom - top + 60);
+    const color = tide.item.accent || tide.item.color || "#ffd36a";
+    const pulse = 0.5 + Math.sin(state.time * 4.2 + tide.phase) * 0.5;
+    const grad = ctx.createLinearGradient(0, y, W, y);
+
+    grad.addColorStop(0, "rgba(255, 255, 255, 0)");
+    grad.addColorStop(0.5, rgbaFromHex(color, 0.12 + pulse * 0.08));
+    grad.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, y - height / 2, W, height);
+
+    ctx.strokeStyle = rgbaFromHex(color, 0.34 + pulse * 0.24);
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 5; i += 1) {
+      const lineY = y - height / 2 + 16 + (i * (height - 32)) / 4;
+      const wave = Math.sin(state.time * 3 + i + tide.phase) * 18;
+      ctx.beginPath();
+      ctx.moveTo(34, lineY);
+      ctx.bezierCurveTo(180 + wave, lineY - 18, 360 - wave, lineY + 18, W - 34, lineY);
+      ctx.stroke();
+    }
+
+    ctx.textAlign = "center";
+    ctx.font = "900 20px Trebuchet MS";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "rgba(7, 18, 28, 0.78)";
+    ctx.fillStyle = color;
+    ctx.strokeText(tide.label, W / 2, y - height / 2 + 28);
+    ctx.fillText(tide.label, W / 2, y - height / 2 + 28);
+  }
+  ctx.restore();
+}
+
 function drawFakeEvents() {
   if (!state.fakePlayersEnabled || state.fakeEvents.length === 0) return;
   ctx.save();
@@ -3390,6 +3484,7 @@ function drawFakeEvents() {
 
 function render() {
   drawBackground();
+  drawFishTides();
   drawGoldenBubbles();
   for (const fish of state.fish) drawFish(fish);
   drawFakePlayers();
