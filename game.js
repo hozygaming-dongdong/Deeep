@@ -72,7 +72,7 @@ const state = {
   spent: 0,
   status: "ready",
   isHolding: false,
-  sharksEnabled: false,
+  sharksEnabled: true,
   fakePlayersEnabled: false,
   goldenBubblesEnabled: false,
   lastTickDepth: 0,
@@ -85,7 +85,7 @@ const state = {
   goldenBubbles: [],
   shark: null,
   sharkCheck: null,
-  nextSharkCheckDepth: 10,
+  nextSharkCheckDepth: 20,
   caughtFish: null,
   bestCandidate: null,
   roundBoss: null,
@@ -654,7 +654,7 @@ function resetRound() {
   state.messageTimer = 0;
   state.shark = null;
   state.sharkCheck = null;
-  state.nextSharkCheckDepth = 10;
+  state.nextSharkCheckDepth = 20;
   state.effects = [];
   state.rocks = [];
   state.goldenBubbles = [];
@@ -983,7 +983,7 @@ function pauseForSharkCheck(depth) {
   state.isHolding = false;
   state.depth = depth;
   state.hookY = yForDepth(state.depth);
-  state.nextSharkCheckDepth = depth + 10;
+  state.nextSharkCheckDepth = depth + 20;
   state.sharkCheck = {
     depth,
     biteLane: null,
