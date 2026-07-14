@@ -593,8 +593,7 @@ function specialForDepth(depth) {
 }
 
 function randomizedMult(baseMult) {
-  const variance = 0.85 + Math.random() * 0.3;
-  return Math.max(1, Math.round(baseMult * fishPayoutBoost * variance));
+  return Math.max(1, Math.round(baseMult * fishPayoutBoost));
 }
 
 function finalPrizeForDepth() {
