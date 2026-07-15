@@ -19,6 +19,7 @@ body {
   width: 100%;
   min-height: 100%;
   margin: 0;
+  touch-action: manipulation;
 }
 
 body {
@@ -53,16 +54,20 @@ button:disabled {
 .game-shell {
   width: min(100vw, 720px);
   height: 100vh;
+  height: 100dvh;
   min-height: 640px;
   display: grid;
   place-items: center;
   background: #06121f;
+  touch-action: manipulation;
 }
 
 .ocean-stage {
   position: relative;
   width: min(100vw, calc(100vh * 0.5625));
+  width: min(100vw, calc(100dvh * 0.5625));
   height: min(100vh, calc(100vw * 1.7778));
+  height: min(100dvh, calc(100vw * 1.7778));
   max-width: 720px;
   max-height: 1280px;
   overflow: hidden;
@@ -71,6 +76,7 @@ button:disabled {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
 canvas {
@@ -81,6 +87,7 @@ canvas {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  touch-action: none;
 }
 
 .hud {
@@ -395,10 +402,11 @@ strong {
 
 .result-panel {
   position: absolute;
-  z-index: 5;
-  top: 28%;
+  z-index: 10;
+  top: 18%;
   right: 34px;
   left: 34px;
+  max-height: calc(100% - 170px);
   padding: 22px 20px 20px;
   border: 3px solid rgba(255, 211, 106, 0.78);
   border-radius: 10px;
@@ -407,6 +415,11 @@ strong {
     var(--panel-strong);
   text-align: center;
   box-shadow: 0 22px 44px rgba(0, 0, 0, 0.45);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
 }
 
 .result-panel.hidden {
@@ -620,11 +633,14 @@ strong {
 #newRoundButton {
   margin-top: 18px;
   padding: 11px 24px;
+  min-height: 52px;
+  min-width: 172px;
   border: 2px solid #ffe09a;
   border-radius: 8px;
   background: linear-gradient(#ffd36a, #b66b2d);
   color: #3c2114;
   font-weight: 950;
+  touch-action: manipulation;
 }
 
 @media (max-width: 520px) {
@@ -711,5 +727,20 @@ strong {
 
   .payout-money {
     font-size: 14px;
+  }
+
+  .result-panel {
+    top: 92px;
+    right: 14px;
+    left: 14px;
+    max-height: calc(100% - 190px);
+    padding: 18px 14px 16px;
+  }
+
+  #newRoundButton {
+    width: 100%;
+    min-height: 56px;
+    margin-top: 14px;
+    font-size: 18px;
   }
 }

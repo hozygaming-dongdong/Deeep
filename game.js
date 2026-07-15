@@ -3567,9 +3567,18 @@ if (balancePanel) {
 pullButton.addEventListener("click", startPull);
 betDownButton.addEventListener("click", () => changeBet(-1));
 betUpButton.addEventListener("click", () => changeBet(1));
-newRoundButton.addEventListener("click", () => {
+let lastNewRoundActionAt = 0;
+
+function handleNewRoundAction(event) {
+  event?.preventDefault();
+  const now = performance.now();
+  if (now - lastNewRoundActionAt < 350) return;
+  lastNewRoundActionAt = now;
   if (!openMysteryClam()) resetRound();
-});
+}
+
+newRoundButton.addEventListener("click", handleNewRoundAction);
+newRoundButton.addEventListener("pointerup", handleNewRoundAction);
 if (sharkToggle) {
   sharkToggle.addEventListener("change", () => {
     state.sharksEnabled = sharkToggle.checked;
@@ -3605,7 +3614,10 @@ if (mysteryChanceSlider) {
 
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 document.addEventListener("selectstart", (event) => event.preventDefault());
+document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
 document.addEventListener("gesturestart", (event) => event.preventDefault());
+document.addEventListener("gesturechange", (event) => event.preventDefault());
+document.addEventListener("gestureend", (event) => event.preventDefault());
 
 updateBossChanceText();
 resetRound();
