@@ -481,6 +481,47 @@ strong {
   content: "";
 }
 
+.fish-icon-squid {
+  width: 28px;
+  height: 30px;
+  border-radius: 48% 48% 42% 42%;
+}
+
+.fish-icon-squid::before {
+  top: 22px;
+  left: 4px;
+  width: 18px;
+  height: 12px;
+  background: var(--fish-accent, #ffb3de);
+  clip-path: polygon(0 0, 22% 100%, 42% 0, 62% 100%, 82% 0, 100% 100%, 100% 0);
+}
+
+.fish-icon-squid::after {
+  top: 9px;
+  right: 8px;
+}
+
+.fish-icon-seahorse {
+  width: 24px;
+  height: 34px;
+  border-radius: 55% 45% 48% 52%;
+}
+
+.fish-icon-seahorse::before {
+  top: 4px;
+  right: -10px;
+  left: auto;
+  width: 15px;
+  height: 9px;
+  background: var(--fish-accent, #fff0a8);
+  clip-path: polygon(0 35%, 100% 0, 100% 100%, 0 65%);
+}
+
+.fish-icon-seahorse::after {
+  top: 6px;
+  right: 4px;
+}
+
 .fish-icon-boss {
   --fish-color: #ff314f;
   --fish-accent: #ffd36a;

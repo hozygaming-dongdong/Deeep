@@ -116,7 +116,9 @@ const fishCatalog = [
   { name: "Puffer Pearl", zone: 1, mult: 6, catchRate: 0.68, holdRate: 0.76, color: "#dff3f4", accent: "#78d7ff", size: 37, rarity: 1 },
   { name: "Bronze Snapper", zone: 2, mult: 12, catchRate: 0.52, holdRate: 0.66, color: "#e35f42", accent: "#ffd36a", size: 44, rarity: 2 },
   { name: "Crimson Bite", zone: 2, mult: 19, catchRate: 0.42, holdRate: 0.57, color: "#d8372e", accent: "#f7f0a1", size: 46, rarity: 2 },
+  { name: "Ruby Squid", zone: 2, mult: 28, catchRate: 0.36, holdRate: 0.52, color: "#d33872", accent: "#ffb3de", size: 50, rarity: 3, shape: "squid" },
   { name: "Lion Crown", zone: 3, mult: 40, catchRate: 0.28, holdRate: 0.46, color: "#ff9b45", accent: "#fff07d", size: 54, rarity: 3 },
+  { name: "Moon Seahorse", zone: 3, mult: 55, catchRate: 0.24, holdRate: 0.4, color: "#7fdcff", accent: "#fff0a8", size: 52, rarity: 4, shape: "seahorse" },
   { name: "Golden Shell", zone: 3, mult: 75, catchRate: 0.18, holdRate: 0.34, color: "#f2c14f", accent: "#ffffff", size: 58, rarity: 4 },
   { name: "Abyss King", zone: 3, mult: 150, catchRate: 0.1, holdRate: 0.25, color: "#77d6e8", accent: "#ff5bd8", size: 66, rarity: 5 },
 ];
@@ -1754,7 +1756,8 @@ function fishIconHtml(name) {
     || specialCatalog.find((item) => item.name === name);
   const color = fish?.color || "#65c9ff";
   const accent = fish?.accent || "#d6f5ff";
-  return `<span class="fish-icon" style="--fish-color:${color};--fish-accent:${accent}"></span>`;
+  const shapeClass = fish?.shape ? ` fish-icon-${fish.shape}` : "";
+  return `<span class="fish-icon${shapeClass}" style="--fish-color:${color};--fish-accent:${accent}"></span>`;
 }
 
 function payoutForCatch(fish) {
@@ -2610,6 +2613,8 @@ function drawSpecialCatch(fish, fishY) {
   if (fish.shape === "ray") drawGhostRay(fish);
   if (fish.shape === "tuna") drawCrownedTuna(fish);
   if (fish.shape === "whale") drawAbyssWhale(fish);
+  if (fish.shape === "squid") drawRubySquid(fish);
+  if (fish.shape === "seahorse") drawMoonSeahorse(fish);
 
   if (isDoubled) {
     ctx.save();
@@ -2884,11 +2889,115 @@ function drawSpecialLabel(fish) {
   ctx.save();
   ctx.scale(fish.dir, 1);
   ctx.textAlign = "center";
-  ctx.fillStyle = fish.tag === "LEGENDARY" ? "#ffef7a" : fish.tag === "EPIC" ? "#ffb7ff" : "#9ffff4";
-  ctx.font = "900 15px Trebuchet MS";
-  ctx.fillText(fish.tag, 0, -fish.size - 34);
+  if (fish.tag) {
+    ctx.fillStyle = fish.tag === "LEGENDARY" ? "#ffef7a" : fish.tag === "EPIC" ? "#ffb7ff" : "#9ffff4";
+    ctx.font = "900 15px Trebuchet MS";
+    ctx.fillText(fish.tag, 0, -fish.size - 34);
+  }
   ctx.font = "950 22px Trebuchet MS";
+  ctx.fillStyle = fish.tag ? ctx.fillStyle : fish.accent;
   ctx.fillText(fishValue(fish), 0, -fish.size - 12);
+  ctx.restore();
+}
+
+function drawRubySquid(fish) {
+  const wiggle = Math.sin(state.time * 5 + fish.phase);
+  ctx.save();
+  ctx.strokeStyle = "#65102c";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  for (let i = -2; i <= 2; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(i * fish.size * 0.13, fish.size * 0.28);
+    ctx.quadraticCurveTo(i * fish.size * 0.18 + wiggle * 10, fish.size * 0.58, i * fish.size * 0.34, fish.size * 0.84);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = fish.color;
+  ctx.strokeStyle = "#65102c";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -fish.size * 0.72);
+  ctx.quadraticCurveTo(fish.size * 0.64, -fish.size * 0.18, fish.size * 0.36, fish.size * 0.36);
+  ctx.quadraticCurveTo(0, fish.size * 0.58, -fish.size * 0.36, fish.size * 0.36);
+  ctx.quadraticCurveTo(-fish.size * 0.64, -fish.size * 0.18, 0, -fish.size * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = fish.accent;
+  ctx.globalAlpha = 0.75;
+  ctx.beginPath();
+  ctx.ellipse(0, -fish.size * 0.08, fish.size * 0.18, fish.size * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = "#fff6da";
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.arc(side * fish.size * 0.2, -fish.size * 0.05, fish.size * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#16040d";
+    ctx.beginPath();
+    ctx.arc(side * fish.size * 0.23, -fish.size * 0.04, fish.size * 0.045, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff6da";
+  }
+  ctx.restore();
+}
+
+function drawMoonSeahorse(fish) {
+  const curl = Math.sin(state.time * 3 + fish.phase) * fish.size * 0.06;
+  ctx.save();
+  ctx.strokeStyle = "#17506b";
+  ctx.lineWidth = 5;
+  ctx.lineCap = "round";
+
+  ctx.fillStyle = fish.color;
+  ctx.beginPath();
+  ctx.ellipse(0, -fish.size * 0.18, fish.size * 0.34, fish.size * 0.7, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = fish.color;
+  ctx.beginPath();
+  ctx.ellipse(fish.size * 0.18, -fish.size * 0.78, fish.size * 0.28, fish.size * 0.2, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(fish.size * 0.4, -fish.size * 0.76);
+  ctx.lineTo(fish.size * 0.76, -fish.size * 0.66);
+  ctx.lineTo(fish.size * 0.4, -fish.size * 0.58);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = fish.accent;
+  ctx.lineWidth = 4;
+  for (let i = -2; i <= 2; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(-fish.size * 0.28, -fish.size * 0.5 + i * fish.size * 0.18);
+    ctx.lineTo(-fish.size * 0.56, -fish.size * 0.46 + i * fish.size * 0.18);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "#17506b";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, fish.size * 0.42);
+  ctx.quadraticCurveTo(-fish.size * 0.2 + curl, fish.size * 0.84, fish.size * 0.16, fish.size * 0.94);
+  ctx.quadraticCurveTo(fish.size * 0.52, fish.size * 1.0, fish.size * 0.36, fish.size * 0.66);
+  ctx.stroke();
+
+  ctx.fillStyle = "#fff6da";
+  ctx.beginPath();
+  ctx.arc(fish.size * 0.25, -fish.size * 0.82, fish.size * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#10212d";
+  ctx.beginPath();
+  ctx.arc(fish.size * 0.28, -fish.size * 0.82, fish.size * 0.035, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
