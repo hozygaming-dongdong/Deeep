@@ -16,6 +16,7 @@ const resultBreakdown = document.getElementById("resultBreakdown");
 const bossOmenOverlay = document.getElementById("bossOmenOverlay");
 const bossOmenTitle = document.getElementById("bossOmenTitle");
 const newRoundButton = document.getElementById("newRoundButton");
+const diveControl = document.getElementById("diveControl");
 const leftDiveButton = document.getElementById("leftDiveButton");
 const rightDiveButton = document.getElementById("rightDiveButton");
 const diveButtons = [leftDiveButton, rightDiveButton].filter(Boolean);
@@ -466,6 +467,18 @@ function moveHookLane(side) {
   const minX = hookCenterX - hookLaneLimit;
   const maxX = hookCenterX + hookLaneLimit;
   state.targetHookX = Math.max(minX, Math.min(maxX, state.targetHookX + direction * hookLaneStep));
+}
+
+function diveSideFromPointer(event) {
+  const rect = diveControl?.getBoundingClientRect();
+  if (!rect) return "left";
+  return event.clientX < rect.left + rect.width / 2 ? "left" : "right";
+}
+
+function switchDiveSide(side) {
+  if (!side || state.diveSide === side) return;
+  state.diveSide = side;
+  setDiveButtonsHeld(side);
 }
 
 function sharkChanceForDepth(depth) {
@@ -3566,28 +3579,39 @@ function changeBet(delta) {
   updateHud();
 }
 
-function bindDiveButton(button, side) {
-  if (!button) return;
-  button.addEventListener("pointerdown", (event) => {
+let activeDivePointerId = null;
+
+if (diveControl) {
+  diveControl.addEventListener("pointerdown", (event) => {
+    if (leftDiveButton?.disabled && rightDiveButton?.disabled) return;
     event.preventDefault();
-    button.setPointerCapture(event.pointerId);
-    beginDive(side);
+    activeDivePointerId = event.pointerId;
+    diveControl.setPointerCapture(event.pointerId);
+    beginDive(diveSideFromPointer(event));
   });
 
-  button.addEventListener("pointerup", (event) => {
+  diveControl.addEventListener("pointermove", (event) => {
+    if (activeDivePointerId !== event.pointerId || !state.isHolding) return;
     event.preventDefault();
+    switchDiveSide(diveSideFromPointer(event));
+  });
+
+  const endDivePointer = (event) => {
+    if (activeDivePointerId !== event.pointerId) return;
+    event.preventDefault();
+    activeDivePointerId = null;
     stopDive();
-  });
+  };
 
-  button.addEventListener("pointercancel", stopDive);
-  button.addEventListener("lostpointercapture", () => {
+  diveControl.addEventListener("pointerup", endDivePointer);
+  diveControl.addEventListener("pointercancel", endDivePointer);
+  diveControl.addEventListener("lostpointercapture", () => {
+    activeDivePointerId = null;
     if (state.isHolding) stopDive();
   });
 }
-
-bindDiveButton(leftDiveButton, "left");
-bindDiveButton(rightDiveButton, "right");
 window.addEventListener("pointerup", () => {
+  activeDivePointerId = null;
   if (state.isHolding) stopDive();
 });
 window.addEventListener("mouseup", () => {
