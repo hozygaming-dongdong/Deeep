@@ -998,7 +998,12 @@ function sinkStep(dt) {
     sound.tick();
 
     if (state.sharksEnabled && state.lastTickDepth < maxDepth && Math.random() < sharkChanceForDepth(state.lastTickDepth)) {
-      triggerShark(state.diveSide);
+      const sharkSide = Math.random() < 0.5 ? "left" : "right";
+      if (sharkSide === state.diveSide) {
+        triggerSharkHit(sharkSide);
+      } else {
+        triggerSharkMiss(sharkSide);
+      }
       return;
     }
 
@@ -1024,7 +1029,22 @@ function pauseAtBottom() {
   pullButton.disabled = false;
 }
 
-function triggerShark(side = "right") {
+function makeShark(side, mode) {
+  const fromLeft = side === "left";
+  return {
+    x: fromLeft ? -180 : W + 180,
+    y: mode === "miss"
+      ? hookDiveY + (side === "left" ? -92 : 92)
+      : hookDiveY + Math.random() * 90 - 45,
+    side,
+    mode,
+    speed: mode === "miss" ? 1120 : 980,
+    done: false,
+    biteTimer: 0,
+  };
+}
+
+function triggerSharkHit(side = "right") {
   state.status = "cut";
   state.isHolding = false;
   state.diveSide = null;
@@ -1032,14 +1052,12 @@ function triggerShark(side = "right") {
   clearDiveButtonState();
   setDiveButtonsDisabled(true);
   pullButton.disabled = true;
-  const fromLeft = side === "left";
-  state.shark = {
-    x: fromLeft ? -180 : W + 180,
-    y: hookDiveY + Math.random() * 120 - 60,
-    side,
-    speed: 980,
-    done: false,
-  };
+  state.shark = makeShark(side, "hit");
+  sound.shark();
+}
+
+function triggerSharkMiss(side = "right") {
+  state.shark = makeShark(side, "miss");
   sound.shark();
 }
 
@@ -1685,16 +1703,24 @@ function updateShark(dt) {
   if (!state.shark) return;
   const direction = state.shark.side === "left" ? 1 : -1;
   state.shark.x += direction * state.shark.speed * dt;
-  const biteX = hookLineX();
+  state.shark.biteTimer = Math.max(0, (state.shark.biteTimer || 0) - dt);
+  const biteX = state.shark.mode === "miss"
+    ? state.shark.side === "left" ? W * 0.24 : W * 0.76
+    : hookLineX();
   const reachedLine = state.shark.side === "left"
     ? state.shark.x > biteX - 35
     : state.shark.x < biteX + 35;
   if (!state.shark.done && reachedLine) {
     state.shark.done = true;
-    state.hookY += 20;
+    state.shark.biteTimer = 0.42;
+    if (state.shark.mode !== "miss") state.hookY += 20;
   }
   if ((state.shark.side === "left" && state.shark.x > W + 260) || (state.shark.side !== "left" && state.shark.x < -260)) {
-    showResult("LINE CUT", "Saw Shark Strike", `The line snapped at ${Math.floor(state.depth)}F. Payout is $0.`, true);
+    if (state.shark.mode === "miss") {
+      state.shark = null;
+    } else {
+      showResult("LINE CUT", "Saw Shark Strike", `The line snapped at ${Math.floor(state.depth)}F. Payout is $0.`, true);
+    }
   }
 }
 
@@ -3087,6 +3113,9 @@ function updateBossOmenOverlay(dt) {
 function drawShark() {
   if (!state.shark) return;
   const s = state.shark;
+  const biteX = s.mode === "miss"
+    ? s.side === "left" ? W * 0.24 : W * 0.76
+    : hookLineX();
   ctx.save();
   ctx.translate(s.x, s.y);
   if (s.side === "left") ctx.scale(-1, 1);
@@ -3135,6 +3164,33 @@ function drawShark() {
     ctx.fill();
   }
   ctx.restore();
+
+  if (s.done && s.biteTimer > 0) {
+    const progress = 1 - s.biteTimer / 0.42;
+    const alpha = Math.max(0, 1 - progress);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(biteX, s.y);
+    ctx.strokeStyle = s.mode === "miss" ? "#c9f6ff" : "#ff5966";
+    ctx.fillStyle = s.mode === "miss" ? "rgba(201, 246, 255, 0.2)" : "rgba(255, 89, 102, 0.24)";
+    ctx.lineWidth = 5;
+    for (let i = 0; i < 3; i += 1) {
+      ctx.beginPath();
+      ctx.arc(0, 0, 22 + i * 16 + progress * 45, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 58 + progress * 48, 24 + progress * 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.font = "950 28px Trebuchet MS";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "rgba(5, 17, 27, 0.82)";
+    ctx.fillStyle = s.mode === "miss" ? "#d9ffff" : "#ffd36a";
+    ctx.strokeText(s.mode === "miss" ? "MISS" : "BITE", 0, -42 - progress * 24);
+    ctx.fillText(s.mode === "miss" ? "MISS" : "BITE", 0, -42 - progress * 24);
+    ctx.restore();
+  }
 }
 
 function drawFishTides() {
