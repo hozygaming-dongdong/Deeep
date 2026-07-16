@@ -26,8 +26,6 @@ const betUpButton = document.getElementById("betUpButton");
 const devToggleButton = document.getElementById("devToggleButton");
 const devControls = document.getElementById("devControls");
 const sharkToggle = document.getElementById("sharkToggle");
-const fakePlayersToggle = document.getElementById("fakePlayersToggle");
-const goldenBubbleToggle = document.getElementById("goldenBubbleToggle");
 const schoolRuleBoard = document.getElementById("schoolRuleBoard");
 const crimsonChanceSlider = document.getElementById("crimsonChanceSlider");
 const crimsonChanceText = document.getElementById("crimsonChanceText");
@@ -42,8 +40,11 @@ const maxDepth = 100;
 const hookTop = 165;
 const hookDiveY = 520;
 const hookCenterX = W / 2;
-const hookLaneLimit = 150;
-const hookLaneStep = 28;
+const worldWidth = 1600;
+const worldMinX = hookCenterX;
+const worldMaxX = worldWidth - hookCenterX;
+const worldStartX = worldWidth / 2;
+const worldLaneStep = 70;
 const layerHeight = 145;
 const betSteps = [10, 20, 50, 100, 200, 500, 1000];
 const TAU = Math.PI * 2;
@@ -59,7 +60,6 @@ const hookCatchRadius = 38;
 const nopeColor = "#9aa3ad";
 const fishPayoutBoost = 0.45;
 const fishSizeScale = 2 / 3;
-const goldenBubbleHitScale = 2;
 const schoolPayoutTable = {
   1: 1,
   2: 2,
@@ -81,18 +81,15 @@ const state = {
   isHolding: false,
   diveSide: null,
   sharksEnabled: true,
-  fakePlayersEnabled: false,
-  goldenBubblesEnabled: false,
   lastTickDepth: 0,
   hookY: hookDiveY,
-  hookX: hookCenterX,
-  targetHookX: hookCenterX,
+  worldX: worldStartX,
+  targetWorldX: worldStartX,
   messageTimer: 0,
   bubbles: [],
   effects: [],
   fish: [],
   rocks: [],
-  goldenBubbles: [],
   fishTides: [],
   shark: null,
   caughtFish: null,
@@ -113,8 +110,6 @@ const state = {
   struggleChecks: [],
   pendingMysteryFish: null,
   result: null,
-  fakePlayers: [],
-  fakeEvents: [],
   time: 0,
 };
 
@@ -446,7 +441,15 @@ function yForDepth(depth) {
 }
 
 function hookLineX() {
-  return state.hookX || hookCenterX;
+  return hookCenterX;
+}
+
+function screenX(worldX) {
+  return worldX - state.worldX + hookCenterX;
+}
+
+function worldHookX() {
+  return state.worldX;
 }
 
 function setDiveButtonsDisabled(disabled) {
@@ -462,11 +465,9 @@ function clearDiveButtonState() {
   for (const button of diveButtons) button.classList.remove("is-held", "is-risk");
 }
 
-function moveHookLane(side) {
+function moveWorldLane(side) {
   const direction = side === "left" ? -1 : 1;
-  const minX = hookCenterX - hookLaneLimit;
-  const maxX = hookCenterX + hookLaneLimit;
-  state.targetHookX = Math.max(minX, Math.min(maxX, state.targetHookX + direction * hookLaneStep));
+  state.targetWorldX = Math.max(worldMinX, Math.min(worldMaxX, state.targetWorldX + direction * worldLaneStep));
 }
 
 function diveSideFromPointer(event) {
@@ -714,7 +715,6 @@ function chanceSliderValue(slider, fallback) {
 }
 
 function makeFishInstance(item, index, depth, overrides = {}) {
-  const lanes = [125, 245, 365, 485, 595];
   return {
     ...item,
     ...overrides,
@@ -722,7 +722,7 @@ function makeFishInstance(item, index, depth, overrides = {}) {
     size: (overrides.size ?? item.size) * fishSizeScale,
     isSpecial: Boolean(item.shape),
     isBoss: Boolean(item.isBoss || overrides.isBoss),
-    x: overrides.x ?? lanes[index % lanes.length] + Math.random() * 54 - 27,
+    worldX: overrides.worldX ?? 80 + Math.random() * (worldWidth - 160),
     depth: overrides.depth ?? Math.min(maxDepth - 0.2, depth + Math.random() * 0.9),
     dir: overrides.dir ?? (index % 2 === 0 ? 1 : -1),
     speed: overrides.speed ?? (0.25 + Math.random() * 0.55),
@@ -741,19 +741,16 @@ function resetRound() {
   state.isHolding = false;
   state.diveSide = null;
   state.sharksEnabled = sharkToggle ? sharkToggle.checked : state.sharksEnabled;
-  state.fakePlayersEnabled = fakePlayersToggle ? fakePlayersToggle.checked : state.fakePlayersEnabled;
-  state.goldenBubblesEnabled = goldenBubbleToggle ? goldenBubbleToggle.checked : state.goldenBubblesEnabled;
   state.lastTickDepth = 0;
   state.hookY = hookDiveY;
-  state.hookX = hookCenterX;
-  state.targetHookX = hookCenterX;
+  state.worldX = worldStartX;
+  state.targetWorldX = worldStartX;
   state.messageTimer = 0;
   state.shark = null;
   state.effects = [];
   state.rocks = [];
   state.seaPattern = chooseSeaPattern();
   state.fishTides = makeFishTides();
-  state.goldenBubbles = [];
   state.caughtFish = [];
   state.bestCandidate = null;
   state.roundBoss = chooseRoundBoss();
@@ -771,10 +768,7 @@ function resetRound() {
   state.struggleChecks = [];
   state.pendingMysteryFish = null;
   state.result = null;
-  state.fakePlayers = makeFakePlayers();
-  state.fakeEvents = [];
   state.fish = makeFish();
-  state.goldenBubbles = state.goldenBubblesEnabled ? makeGoldenBubbles() : [];
   resultPanel.classList.add("hidden");
   clearDiveButtonState();
   if (resultBreakdown) {
@@ -801,7 +795,7 @@ function makeFish() {
       const extraCount = 2 + Math.floor(Math.random() * 3);
       for (let i = 0; i < extraCount; i += 1) {
         fish.push(makeFishInstance(item, fish.length, Math.min(tide.end, depth + Math.random() * 0.5), {
-          x: 80 + Math.random() * (W - 160),
+          worldX: 80 + Math.random() * (worldWidth - 160),
           dir: Math.random() < 0.5 ? -1 : 1,
           speed: 0.78 + Math.random() * 0.62,
         }));
@@ -813,7 +807,7 @@ function makeFish() {
   if (boss) {
     const bossDepth = 82 + Math.random() * 16;
     fish.push(makeFishInstance(boss, fish.length, bossDepth, {
-      x: W / 2 + Math.random() * 140 - 70,
+      worldX: 80 + Math.random() * (worldWidth - 160),
       depth: bossDepth,
       dir: Math.random() < 0.5 ? 1 : -1,
       fixedMult: boss.mult,
@@ -823,48 +817,13 @@ function makeFish() {
   }
 
   fish.push(makeFishInstance(finalPrizeForDepth(), fish.length, maxDepth, {
-    x: W / 2 + Math.random() * 58 - 29,
+    worldX: worldMinX + Math.random() * (worldMaxX - worldMinX),
     depth: maxDepth - 0.15,
     dir: Math.random() < 0.5 ? 1 : -1,
     catchRate: 0.34,
   }));
 
   return fish;
-}
-
-function makeGoldenBubbles() {
-  const bubbles = [];
-  for (let depth = 14; depth < maxDepth - 4; depth += 32 + Math.random() * 18) {
-    const x = 90 + Math.random() * (W - 180);
-    bubbles.push({
-      depth,
-      baseX: x,
-      x,
-      r: 48 + Math.random() * 16,
-      phase: Math.random() * Math.PI * 2,
-      dir: Math.random() < 0.5 ? -1 : 1,
-      speed: 32 + Math.random() * 58,
-      driftRange: 70 + Math.random() * 120,
-      triggered: false,
-    });
-  }
-  return bubbles;
-}
-
-function makeFakePlayers() {
-  const names = ["Seven", "Mad", "Hao", "CC", "Ivan", "Hank"];
-  const colors = ["#ff9aa7", "#8ff6ff", "#ffd36a", "#b86cff", "#78e6a3", "#ffb36a"];
-  return names.map((name, index) => ({
-    name,
-    color: colors[index],
-    lane: 78 + index * ((W - 156) / Math.max(1, names.length - 1)) + Math.random() * 24 - 12,
-    depth: Math.random() * 12,
-    targetDepth: 22 + Math.random() * 58,
-    phase: Math.random() * Math.PI * 2,
-    status: index % 2 === 0 ? "diving" : "idle",
-    timer: 0.6 + Math.random() * 3,
-    opacity: 0.36 + Math.random() * 0.18,
-  }));
 }
 
 function updateHud() {
@@ -988,17 +947,6 @@ function triggerPullSurge() {
     longestShuffle = Math.max(longestShuffle, fish.shuffleTimer);
   }
 
-  for (const bubble of state.goldenBubbles) {
-    if (bubble.triggered || bubble.depth > state.pullStartDepth) continue;
-    bubble.shuffleTimer = 0.5 + Math.random() * 1.0;
-    bubble.shuffleDuration = bubble.shuffleTimer;
-    bubble.shuffleSpeed = 180 + Math.random() * 260;
-    bubble.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
-    bubble.dir = Math.random() < 0.5 ? -1 : 1;
-    bubble.phase = Math.random() * Math.PI * 2;
-    longestShuffle = Math.max(longestShuffle, bubble.shuffleTimer);
-  }
-
   longestShuffle = Math.max(0.5, longestShuffle);
   state.effects.push({
     type: "pull-surge",
@@ -1021,13 +969,6 @@ function finishPullShuffle() {
     fish.shuffleDuration = null;
     fish.shuffleSpeed = null;
     fish.shuffleTurnTimer = null;
-  }
-  for (const bubble of state.goldenBubbles) {
-    bubble.shuffleTimer = 0;
-    bubble.shuffleDuration = null;
-    bubble.shuffleSpeed = null;
-    bubble.shuffleTurnTimer = null;
-    bubble.baseX = bubble.x;
   }
   state.rocks = makePullRocks(state.depth);
 }
@@ -1053,7 +994,7 @@ function sinkStep(dt) {
     state.lastTickDepth += 1;
     state.spent += bet();
     state.balance -= bet();
-    moveHookLane(state.diveSide);
+    moveWorldLane(state.diveSide);
     sound.tick();
 
     if (state.sharksEnabled && state.lastTickDepth < maxDepth && Math.random() < sharkChanceForDepth(state.lastTickDepth)) {
@@ -1087,7 +1028,7 @@ function triggerShark(side = "right") {
   state.status = "cut";
   state.isHolding = false;
   state.diveSide = null;
-  state.hookX = state.targetHookX;
+  state.worldX = state.targetWorldX;
   clearDiveButtonState();
   setDiveButtonsDisabled(true);
   pullButton.disabled = true;
@@ -1138,7 +1079,7 @@ function updatePull(dt) {
     if (fish.depth < state.depth || fish.depth > previousDepth) continue;
 
     const fishY = yForDepth(fish.depth);
-    const distance = Math.hypot(fish.x - hookLineX(), fishY - hookDiveY);
+    const distance = Math.hypot(fish.worldX - worldHookX(), fishY - hookDiveY);
     const catchRadius = fish.isBoss ? hookCatchRadius + 52 : hookCatchRadius;
     if (distance <= catchRadius) {
       if (!makeCatchRoom(fish)) continue;
@@ -1150,7 +1091,6 @@ function updatePull(dt) {
     }
   }
 
-  maybeTriggerGoldenBubble(previousDepth);
   updateOctopusCollector(dt);
   updateCaughtFishChain(dt);
   checkRockHits();
@@ -1178,23 +1118,6 @@ function makeCatchRoom(fish) {
   return true;
 }
 
-function maybeTriggerGoldenBubble(previousDepth) {
-  if (!state.goldenBubblesEnabled) return;
-  if (state.roulette) return;
-  for (const bubble of state.goldenBubbles) {
-    if (bubble.triggered) continue;
-    if (bubble.depth < state.depth || bubble.depth > previousDepth) continue;
-
-    const bubbleY = yForDepth(bubble.depth);
-    const distance = Math.hypot(bubble.x - hookLineX(), bubbleY - hookDiveY);
-    if (distance <= hookCatchRadius + bubble.r * goldenBubbleHitScale) {
-      bubble.triggered = true;
-      startGoldenBubbleRoulette();
-      return;
-    }
-  }
-}
-
 function updateOctopusCollector(dt) {
   const octopus = state.caughtFish.find((fish) => fish.bossType === "octopus");
   if (!octopus || state.caughtFish.length >= maxCaughtFish()) return;
@@ -1208,7 +1131,7 @@ function updateOctopusCollector(dt) {
     .map((fish) => ({
       fish,
       y: yForDepth(fish.depth),
-      distance: Math.hypot(fish.x - hookLineX(), yForDepth(fish.depth) - hookDiveY),
+      distance: Math.hypot(fish.worldX - worldHookX(), yForDepth(fish.depth) - hookDiveY),
     }))
     .filter((item) => item.y > hookTop + 40 && item.y < H - 210 && item.distance < 165)
     .sort((a, b) => a.distance - b.distance);
@@ -1225,76 +1148,12 @@ function updateOctopusCollector(dt) {
   sound.hook();
 }
 
-function updateGoldenBubbles(dt) {
-  if (!state.goldenBubblesEnabled) return;
-  const surgeActive = state.status === "shuffle" && state.pullSurgeTimer > 0;
-  for (const bubble of state.goldenBubbles) {
-    if (bubble.triggered) continue;
-
-    const isShuffling = surgeActive && bubble.depth <= state.pullStartDepth && bubble.shuffleTimer > 0;
-    if (isShuffling) {
-      bubble.shuffleTimer = Math.max(0, bubble.shuffleTimer - dt);
-      bubble.shuffleTurnTimer = Math.max(0, (bubble.shuffleTurnTimer || 0) - dt);
-      if (bubble.shuffleTurnTimer <= 0 && Math.random() < 0.72) {
-        bubble.dir *= -1;
-        bubble.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
-      }
-      bubble.phase += dt * 18;
-      bubble.x += bubble.dir * (bubble.shuffleSpeed || 220) * dt;
-      if (bubble.shuffleTimer <= 0) {
-        bubble.shuffleDuration = null;
-        bubble.shuffleSpeed = null;
-        bubble.shuffleTurnTimer = null;
-      }
-    } else {
-      bubble.x += bubble.dir * bubble.speed * dt;
-    }
-
-    const left = isShuffling ? 62 : Math.max(62, bubble.baseX - bubble.driftRange);
-    const right = isShuffling ? W - 62 : Math.min(W - 62, bubble.baseX + bubble.driftRange);
-    if (bubble.x <= left) {
-      bubble.x = left;
-      bubble.dir = 1;
-    } else if (bubble.x >= right) {
-      bubble.x = right;
-      bubble.dir = -1;
-    }
-  }
-}
-
-function startGoldenBubbleRoulette() {
-  const outcome = Math.random() < 0.5 ? "DOUBLE" : "SAFE";
-  state.roulette = {
-    timer: 0,
-    duration: 0.95,
-    settleTimer: 0,
-    settleDuration: 0.55,
-    settled: false,
-    outcome,
-    mode: "golden",
-    doubleChance: 0.5,
-    finalPointerAngle: pickGoldenBubbleLanding(outcome),
-    startAngle: Math.random() * Math.PI * 2,
-    spins: 4 + Math.floor(Math.random() * 3),
-    resolved: false,
-  };
-  sound.roulette();
-}
-
-function pickGoldenBubbleLanding(outcome) {
-  const margin = 0.16;
-  if (outcome === "DOUBLE") {
-    return margin + Math.random() * (Math.PI - margin * 2);
-  }
-  return Math.PI + margin + Math.random() * (Math.PI - margin * 2);
-}
-
 function makePullRocks(startDepth) {
   const rocks = [];
   for (let depth = Math.max(8, startDepth - 8); depth > 4; depth -= 10 + Math.random() * 7) {
     rocks.push({
       depth,
-      x: 110 + Math.random() * (W - 220),
+      worldX: Math.max(80, Math.min(worldWidth - 80, worldHookX() + Math.random() * 620 - 310)),
       y: yForDepth(depth),
       w: 62 + Math.random() * 41,
       h: 19 + Math.random() * 11,
@@ -1309,10 +1168,10 @@ function makePullRocks(startDepth) {
 
 function updatePullRocks(dt) {
   for (const rock of state.rocks) {
-    rock.x += rock.dir * rock.speed * dt;
+    rock.worldX += rock.dir * rock.speed * dt;
     rock.y = yForDepth(rock.depth);
     rock.cooldown = Math.max(0, rock.cooldown - dt);
-    if (rock.x < 70 || rock.x > W - 70) rock.dir *= -1;
+    if (rock.worldX < 80 || rock.worldX > worldWidth - 80) rock.dir *= -1;
   }
 }
 
@@ -1320,7 +1179,9 @@ function updateCaughtFishChain(dt) {
   let yOffset = 64;
   state.caughtFish.forEach((fish, index) => {
     fish.chainIndex = index;
-    fish.x += (hookLineX() + Math.sin(state.time * 7 + index) * 18 - fish.x) * Math.min(1, dt * 9);
+    const targetWorldX = worldHookX() + Math.sin(state.time * 7 + index) * 18;
+    fish.worldX += (targetWorldX - fish.worldX) * Math.min(1, dt * 9);
+    fish.x = screenX(fish.worldX);
     fish.y = hookDiveY + yOffset;
     yOffset += fish.isBoss ? Math.max(56, fish.size * 0.46) : 26;
   });
@@ -1332,7 +1193,7 @@ function checkRockHits() {
     if (rock.cooldown > 0) continue;
     const nearChain = state.caughtFish.some((fish) => Math.abs(rock.y - (fish.y || hookDiveY)) < 54);
     if (!nearChain) continue;
-    if (Math.abs(rock.x - hookLineX()) > rock.w * 0.5 + 34) continue;
+    if (Math.abs(rock.worldX - worldHookX()) > rock.w * 0.5 + 34) continue;
 
     const dropCount = 1 + Math.floor(Math.random() * state.caughtFish.length);
     dropCaughtFish(dropCount, rock);
@@ -1577,21 +1438,6 @@ function updateRoulette(dt) {
 
   if (roulette.resolved) return;
   roulette.resolved = true;
-
-  if (roulette.mode === "golden") {
-    if (roulette.outcome === "DOUBLE") {
-      for (const fish of state.caughtFish) {
-        fish.valueMultiplier = (fish.valueMultiplier || 1) * 2;
-        fish.doubleFlash = 1.2;
-      }
-      if (state.caughtFish.length) {
-        state.bestCandidate = state.caughtFish[state.caughtFish.length - 1];
-        addDoubleEffect(state.bestCandidate);
-      }
-    }
-    state.roulette = null;
-    return;
-  }
 
   const visibleOutcome = outcomeForRouletteAngle(roulette.finalPointerAngle, {
     escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
@@ -1852,9 +1698,9 @@ function updateShark(dt) {
   }
 }
 
-function updateHookLane(dt) {
+function updateWorldLane(dt) {
   const speed = state.status === "pulling" || state.status === "shuffle" ? 7 : 10;
-  state.hookX += (state.targetHookX - state.hookX) * Math.min(1, dt * speed);
+  state.worldX += (state.targetWorldX - state.worldX) * Math.min(1, dt * speed);
 }
 
 function updateFish(dt) {
@@ -1871,7 +1717,7 @@ function updateFish(dt) {
         fish.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
       }
       fish.phase += dt * 22;
-      fish.x += fish.speed * fish.dir * dt * 350 * (fish.shuffleSpeed || 5);
+      fish.worldX += fish.speed * fish.dir * dt * 350 * (fish.shuffleSpeed || 5);
       if (fish.shuffleTimer <= 0) {
         fish.shuffleDuration = null;
         fish.shuffleSpeed = null;
@@ -1879,12 +1725,13 @@ function updateFish(dt) {
       }
     } else {
       fish.phase += dt * 5.6;
-      fish.x += fish.speed * fish.dir * dt * 350;
+      fish.worldX += fish.speed * fish.dir * dt * 350;
     }
 
-    if (fish.x < 68) fish.dir = 1;
-    if (fish.x > W - 68) fish.dir = -1;
-    fish.x = Math.max(68, Math.min(W - 68, fish.x));
+    if (fish.worldX < 68) fish.dir = 1;
+    if (fish.worldX > worldWidth - 68) fish.dir = -1;
+    fish.worldX = Math.max(68, Math.min(worldWidth - 68, fish.worldX));
+    fish.x = screenX(fish.worldX);
   }
   state.pullSurgeTimer = Math.max(0, state.pullSurgeTimer - dt);
   state.hookShakeTimer = Math.max(0, state.hookShakeTimer - dt);
@@ -1904,7 +1751,7 @@ function addDoubleEffect(fish) {
 function addCollectorEffect(fish, boss) {
   state.effects.push({
     type: "collector",
-    x: fish.x,
+    x: screenX(fish.worldX),
     y: yForDepth(fish.depth),
     timer: 0,
     duration: 1.0,
@@ -1931,79 +1778,6 @@ function updateEffects(dt) {
   state.effects = state.effects.filter((effect) => effect.timer < effect.duration);
 }
 
-function updateFakePlayers(dt) {
-  if (!state.fakePlayersEnabled) {
-    state.fakeEvents = [];
-    return;
-  }
-
-  const pressure = state.bossOmenTriggered && state.depth < 88 ? 1.35 : 1;
-  for (const player of state.fakePlayers) {
-    player.timer -= dt;
-    player.phase += dt * 2;
-
-    if (player.status === "idle") {
-      if (player.timer <= 0) {
-        player.status = "diving";
-        player.targetDepth = Math.max(12, Math.min(maxDepth, state.depth + 18 + Math.random() * 34));
-        player.timer = 1.5 + Math.random() * 2.5;
-      }
-      continue;
-    }
-
-    if (player.status === "diving") {
-      player.depth = Math.min(player.targetDepth, player.depth + dt * (8 + Math.random() * 3) * pressure);
-      if (player.depth >= player.targetDepth - 0.5 || player.timer <= 0) {
-        player.status = "pulling";
-        player.timer = 1.4 + Math.random() * 2.2;
-        addFakeEvent(`${player.name} starts pulling at ${Math.floor(player.depth)}F`, player.color);
-      }
-      continue;
-    }
-
-    if (player.status === "pulling") {
-      player.depth = Math.max(0, player.depth - dt * (10 + Math.random() * 4));
-      if (player.depth <= 1 || player.timer <= 0) {
-        fakePlayerResult(player);
-        player.status = "idle";
-        player.timer = 1.8 + Math.random() * 4.4;
-        player.targetDepth = 18 + Math.random() * 62;
-      }
-    }
-  }
-
-  for (const event of state.fakeEvents) event.timer += dt;
-  state.fakeEvents = state.fakeEvents.filter((event) => event.timer < event.duration);
-}
-
-function fakePlayerResult(player) {
-  const bossHint = state.bossOmen && Math.random() < 0.35;
-  if (bossHint) {
-    addFakeEvent(`${player.name} rushes the ${state.bossOmen.type.toUpperCase()} signal`, player.color);
-    return;
-  }
-
-  const roll = Math.random();
-  if (roll < 0.22) {
-    addFakeEvent(`${player.name} lost the line`, player.color);
-  } else if (roll < 0.52) {
-    addFakeEvent(`${player.name} escaped at ${Math.floor(player.depth + Math.random() * 18)}F`, player.color);
-  } else {
-    const fakeWin = bet() * (6 + Math.floor(Math.random() * 90));
-    addFakeEvent(`${player.name} pulled ${money(fakeWin)}`, player.color);
-  }
-}
-
-function addFakeEvent(text, color) {
-  state.fakeEvents.unshift({
-    text,
-    color,
-    timer: 0,
-    duration: 2.6,
-  });
-  state.fakeEvents = state.fakeEvents.slice(0, 4);
-}
-
 function addBubbles(dt) {
   if (Math.random() < dt * 9) {
     state.bubbles.push({
@@ -2024,7 +1798,7 @@ function addBubbles(dt) {
 
 function drawBackground() {
   const depthRatio = Math.min(1, state.depth / maxDepth);
-  const laneShift = (hookLineX() - hookCenterX) * 0.18;
+  const laneShift = (worldHookX() - worldStartX) * -0.1;
   const sea = ctx.createLinearGradient(0, 0, 0, H);
   sea.addColorStop(0, depthRatio < 0.2 ? "#61c2df" : depthRatio < 0.62 ? "#2b8fb1" : "#1c6d94");
   sea.addColorStop(0.18, depthRatio < 0.52 ? "#127aa7" : "#126888");
@@ -2272,7 +2046,7 @@ function drawPullRocks() {
   for (const rock of state.rocks) {
     if (rock.y < hookTop - 80 || rock.y > H - 160) continue;
     ctx.save();
-    ctx.translate(rock.x, rock.y + Math.sin(state.time * 3 + rock.phase) * 4);
+    ctx.translate(screenX(rock.worldX), rock.y + Math.sin(state.time * 3 + rock.phase) * 4);
     const dangerPulse = 0.55 + Math.sin(state.time * 7 + rock.phase) * 0.18;
     ctx.save();
     ctx.globalAlpha = rock.cooldown > 0 ? 0.8 : dangerPulse;
@@ -2326,43 +2100,6 @@ function drawBubbles() {
     ctx.beginPath();
     ctx.arc(bubble.x, bubble.y, bubble.r, 0, Math.PI * 2);
     ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawGoldenBubbles() {
-  if (!state.goldenBubblesEnabled) return;
-  ctx.save();
-  for (const bubble of state.goldenBubbles) {
-    if (bubble.triggered) continue;
-    const y = yForDepth(bubble.depth);
-    if (y < hookTop - 80 || y > H - 130) continue;
-    const pulse = 1 + Math.sin(state.time * 4.2 + bubble.phase) * 0.08;
-    const r = bubble.r * pulse;
-
-    ctx.globalAlpha = 0.85;
-    const glow = ctx.createRadialGradient(bubble.x, y, r * 0.15, bubble.x, y, r * 2.0);
-    glow.addColorStop(0, "rgba(255, 246, 170, 0.92)");
-    glow.addColorStop(0.45, "rgba(255, 211, 106, 0.42)");
-    glow.addColorStop(1, "rgba(255, 211, 106, 0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(bubble.x, y, r * 2.0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.globalAlpha = 0.96;
-    ctx.fillStyle = "rgba(255, 217, 88, 0.28)";
-    ctx.strokeStyle = "#fff0a8";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(bubble.x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
-    ctx.beginPath();
-    ctx.arc(bubble.x - r * 0.28, y - r * 0.34, r * 0.22, 0, Math.PI * 2);
-    ctx.fill();
   }
   ctx.restore();
 }
@@ -2435,58 +2172,18 @@ function drawHook() {
   ctx.restore();
 }
 
-function drawFakePlayers() {
-  if (!state.fakePlayersEnabled) return;
-  for (const player of state.fakePlayers) {
-    const y = yForDepth(player.depth);
-    if (y < hookTop - 110 || y > H - 190) continue;
-    const x = player.lane + Math.sin(state.time * 1.8 + player.phase) * 18;
-    const hookScale = 0.48;
-
-    ctx.save();
-    ctx.globalAlpha = player.opacity;
-    ctx.strokeStyle = player.color;
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 12]);
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, y - 18);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = player.color;
-    ctx.font = "900 16px Trebuchet MS";
-    ctx.textAlign = "center";
-    ctx.fillText(player.name, x, Math.max(36, y - 52));
-
-    ctx.translate(x, y);
-    ctx.scale(hookScale, hookScale);
-    ctx.strokeStyle = player.color;
-    ctx.lineWidth = 12;
-    ctx.beginPath();
-    ctx.moveTo(0, -38);
-    ctx.quadraticCurveTo(-30, 8, -10, 48);
-    ctx.quadraticCurveTo(10, 72, 43, 38);
-    ctx.stroke();
-    ctx.fillStyle = player.color;
-    ctx.beginPath();
-    ctx.arc(0, -40, 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-}
-
 function drawFish(fish) {
   if (fish.escaped) return;
   const fishY = fish.hooked ? fish.y : yForDepth(fish.depth) + Math.sin(fish.phase) * 9;
+  const fishScreenX = fish.hooked ? fish.x : screenX(fish.worldX);
   if (fish.isBoss) {
     if (!fish.hooked && (fishY < hookTop - fish.size || fishY > H - 160)) return;
-    drawBossCatch(fish, fishY);
+    drawBossCatch(fish, fishY, fishScreenX);
     return;
   }
   if (!fish.hooked && (fishY < hookTop - 90 || fishY > H - 230)) return;
   if (fish.isSpecial) {
-    drawSpecialCatch(fish, fishY);
+    drawSpecialCatch(fish, fishY, fishScreenX);
     return;
   }
 
@@ -2497,7 +2194,7 @@ function drawFish(fish) {
   const isDoubled = (fish.valueMultiplier || 1) > 1;
 
   ctx.save();
-  ctx.translate(fish.x + struggle, fishY);
+  ctx.translate(fishScreenX + struggle, fishY);
   ctx.rotate(roll);
   ctx.scale(fish.dir, 1);
 
@@ -2610,14 +2307,14 @@ function drawFish(fish) {
   ctx.restore();
 }
 
-function drawSpecialCatch(fish, fishY) {
+function drawSpecialCatch(fish, fishY, fishScreenX = screenX(fish.worldX)) {
   const struggle = fish.hooked ? Math.sin(state.time * 24) * 13 : Math.sin(state.time * 2 + fish.phase) * 8;
   const bob = Math.sin(state.time * 3 + fish.phase) * 6;
   const pulse = 1 + Math.sin(state.time * 4 + fish.phase) * 0.05;
   const isDoubled = (fish.valueMultiplier || 1) > 1;
 
   ctx.save();
-  ctx.translate(fish.x + struggle, fishY + bob);
+  ctx.translate(fishScreenX + struggle, fishY + bob);
   ctx.scale(fish.dir * pulse, pulse);
 
   drawSpecialGlow(fish);
@@ -2648,13 +2345,13 @@ function drawSpecialCatch(fish, fishY) {
   ctx.restore();
 }
 
-function drawBossCatch(fish, fishY) {
+function drawBossCatch(fish, fishY, fishScreenX = screenX(fish.worldX)) {
   if (fish.bossType === "octopus") {
-    drawOctopusBoss(fish, fishY);
+    drawOctopusBoss(fish, fishY, fishScreenX);
     return;
   }
   if (fish.bossType === "mystery") {
-    drawMysteryBoss(fish, fishY);
+    drawMysteryBoss(fish, fishY, fishScreenX);
     return;
   }
 
@@ -2664,7 +2361,7 @@ function drawBossCatch(fish, fishY) {
   const isDoubled = (fish.valueMultiplier || 1) > 1;
 
   ctx.save();
-  ctx.translate(fish.x + struggle, fishY + bob);
+  ctx.translate(fishScreenX + struggle, fishY + bob);
   ctx.scale(fish.dir * pulse, pulse);
 
   const glow = 0.58 + Math.sin(state.time * 6) * 0.14;
@@ -2759,11 +2456,11 @@ function drawBossCatch(fish, fishY) {
   ctx.restore();
 }
 
-function drawOctopusBoss(fish, fishY) {
+function drawOctopusBoss(fish, fishY, fishScreenX = screenX(fish.worldX)) {
   const wiggle = fish.hooked ? Math.sin(state.time * 24) * 20 : Math.sin(state.time * 2 + fish.phase) * 14;
   const pulse = 1 + Math.sin(state.time * 5 + fish.phase) * 0.055;
   ctx.save();
-  ctx.translate(fish.x + wiggle, fishY + Math.sin(state.time * 3) * 8);
+  ctx.translate(fishScreenX + wiggle, fishY + Math.sin(state.time * 3) * 8);
   ctx.scale(pulse, pulse);
 
   ctx.save();
@@ -2819,11 +2516,11 @@ function drawOctopusBoss(fish, fishY) {
   ctx.restore();
 }
 
-function drawMysteryBoss(fish, fishY) {
+function drawMysteryBoss(fish, fishY, fishScreenX = screenX(fish.worldX)) {
   const wobble = fish.hooked ? Math.sin(state.time * 22) * 18 : Math.sin(state.time * 2 + fish.phase) * 12;
   const pulse = 1 + Math.sin(state.time * 6 + fish.phase) * 0.06;
   ctx.save();
-  ctx.translate(fish.x + wobble, fishY + Math.sin(state.time * 3) * 8);
+  ctx.translate(fishScreenX + wobble, fishY + Math.sin(state.time * 3) * 8);
   ctx.scale(pulse, pulse);
 
   ctx.save();
@@ -3174,16 +2871,10 @@ function drawRoulette() {
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff6da";
   ctx.font = "900 24px Trebuchet MS";
-  ctx.fillText(roulette.mode === "golden" ? "GOLDEN BUBBLE" : "STRUGGLE CHECK", cx, cy - 100);
+  ctx.fillText("STRUGGLE CHECK", cx, cy - 100);
   ctx.font = "800 16px Trebuchet MS";
   ctx.fillStyle = "#a9d8eb";
-  ctx.fillText(
-    roulette.mode === "golden"
-      ? "Nope 50% / Double 50%"
-      : `Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`,
-    cx,
-    cy - 76
-  );
+  ctx.fillText(`Check ${roulette.checkIndex}/${roulette.checkTotal} - Escape ${Math.round(roulette.escapeChance * 100)}% / Double ${Math.round(roulette.doubleChance * 100)}%`, cx, cy - 76);
 
   ctx.translate(cx, cy + 10);
 
@@ -3194,21 +2885,16 @@ function drawRoulette() {
   ctx.fillStyle = nopeColor;
   ctx.fill();
 
-  const doubleStart = roulette.mode === "golden" ? 0 : roulette.doubleStart;
-  const doubleEnd = roulette.mode === "golden" ? Math.PI : roulette.doubleEnd;
-
-  if (roulette.mode !== "golden") {
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, radius, roulette.escapeStart, roulette.escapeEnd);
-    ctx.closePath();
-    ctx.fillStyle = "#cf344a";
-    ctx.fill();
-  }
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.arc(0, 0, radius, roulette.escapeStart, roulette.escapeEnd);
+  ctx.closePath();
+  ctx.fillStyle = "#cf344a";
+  ctx.fill();
 
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.arc(0, 0, radius, doubleStart, doubleEnd);
+  ctx.arc(0, 0, radius, roulette.doubleStart, roulette.doubleEnd);
   ctx.closePath();
   ctx.fillStyle = "#f4c542";
   ctx.fill();
@@ -3238,22 +2924,15 @@ function drawRoulette() {
   ctx.arc(0, 0, 14, 0, Math.PI * 2);
   ctx.fill();
 
-  if (roulette.mode === "golden") {
-    drawRouletteLegendItem(-45, radius + 35, "#f4c542", "DOUBLE");
-    drawRouletteLegendItem(45, radius + 35, nopeColor, "NOPE");
-  } else {
-    drawRouletteLegendItem(-82, radius + 35, "#cf344a", "ESCAPE");
-    drawRouletteLegendItem(0, radius + 35, "#f4c542", "DOUBLE");
-    drawRouletteLegendItem(82, radius + 35, nopeColor, "NOPE");
-  }
+  drawRouletteLegendItem(-82, radius + 35, "#cf344a", "ESCAPE");
+  drawRouletteLegendItem(0, radius + 35, "#f4c542", "DOUBLE");
+  drawRouletteLegendItem(82, radius + 35, nopeColor, "NOPE");
 
   if (progress >= 1) {
-    const visibleOutcome = roulette.mode === "golden"
-      ? roulette.outcome
-      : outcomeForRouletteAngle(roulette.finalPointerAngle, {
-        escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
-        double: { start: roulette.doubleStart, end: roulette.doubleEnd },
-      });
+    const visibleOutcome = outcomeForRouletteAngle(roulette.finalPointerAngle, {
+      escape: { start: roulette.escapeStart, end: roulette.escapeEnd },
+      double: { start: roulette.doubleStart, end: roulette.doubleEnd },
+    });
     ctx.fillStyle = visibleOutcome === "ESCAPE" ? "#ff5966" : visibleOutcome === "DOUBLE" ? "#ffd36a" : nopeColor;
     ctx.font = "950 30px Trebuchet MS";
     ctx.fillText(visibleOutcome === "SAFE" ? "NOPE" : visibleOutcome, 0, radius + 78);
@@ -3494,44 +3173,14 @@ function drawFishTides() {
   ctx.restore();
 }
 
-function drawFakeEvents() {
-  if (!state.fakePlayersEnabled || state.fakeEvents.length === 0) return;
-  ctx.save();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-
-  state.fakeEvents.forEach((event, index) => {
-    const progress = event.timer / event.duration;
-    const alpha = Math.max(0, Math.min(1, 1 - progress));
-    const y = 166 + index * 36 - progress * 8;
-    const x = 22;
-    ctx.globalAlpha = alpha * 0.86;
-    ctx.fillStyle = "rgba(5, 17, 27, 0.72)";
-    ctx.beginPath();
-    ctx.roundRect(x, y - 16, 286, 30, 8);
-    ctx.fill();
-    ctx.strokeStyle = event.color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = event.color;
-    ctx.font = "900 13px Trebuchet MS";
-    ctx.fillText(event.text, x + 10, y);
-  });
-
-  ctx.restore();
-}
-
 function render() {
   drawBackground();
   drawFishTides();
-  drawGoldenBubbles();
   for (const fish of state.fish) drawFish(fish);
-  drawFakePlayers();
   drawPullRocks();
   drawHook();
   drawShark();
   drawEffects();
-  drawFakeEvents();
   drawDepthShade(Math.min(1, state.depth / maxDepth));
   drawRoulette();
   if (state.bossWheel) drawBossRoulette(state.bossWheel);
@@ -3553,16 +3202,14 @@ function frame(now) {
   const dt = Math.min(0.04, (now - state.previousNow) / 1000);
   state.previousNow = now;
   state.time += dt;
-  updateHookLane(dt);
+  updateWorldLane(dt);
 
   sinkStep(dt);
   updatePullShuffle(dt);
   updateRoulette(dt);
-  updateGoldenBubbles(dt);
   updatePull(dt);
   updateShark(dt);
   updateFish(dt);
-  updateFakePlayers(dt);
   updateEffects(dt);
   addBubbles(dt);
   updateHud();
@@ -3645,19 +3292,6 @@ newRoundButton.addEventListener("pointerup", handleNewRoundAction);
 if (sharkToggle) {
   sharkToggle.addEventListener("change", () => {
     state.sharksEnabled = sharkToggle.checked;
-  });
-}
-if (fakePlayersToggle) {
-  fakePlayersToggle.addEventListener("change", () => {
-    state.fakePlayersEnabled = fakePlayersToggle.checked;
-    if (!state.fakePlayersEnabled) state.fakeEvents = [];
-  });
-}
-if (goldenBubbleToggle) {
-  goldenBubbleToggle.addEventListener("change", () => {
-    state.goldenBubblesEnabled = goldenBubbleToggle.checked;
-    if (!state.goldenBubblesEnabled) state.goldenBubbles = [];
-    if (state.status === "ready") resetRound();
   });
 }
 if (devToggleButton && devControls) {
