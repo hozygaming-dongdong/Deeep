@@ -16,7 +16,9 @@ const resultBreakdown = document.getElementById("resultBreakdown");
 const bossOmenOverlay = document.getElementById("bossOmenOverlay");
 const bossOmenTitle = document.getElementById("bossOmenTitle");
 const newRoundButton = document.getElementById("newRoundButton");
-const deepButton = document.getElementById("deepButton");
+const leftDiveButton = document.getElementById("leftDiveButton");
+const rightDiveButton = document.getElementById("rightDiveButton");
+const diveButtons = [leftDiveButton, rightDiveButton].filter(Boolean);
 const pullButton = document.getElementById("pullButton");
 const betDownButton = document.getElementById("betDownButton");
 const betUpButton = document.getElementById("betUpButton");
@@ -38,6 +40,9 @@ const H = canvas.height;
 const maxDepth = 100;
 const hookTop = 165;
 const hookDiveY = 520;
+const hookCenterX = W / 2;
+const hookLaneLimit = 150;
+const hookLaneStep = 28;
 const layerHeight = 145;
 const betSteps = [10, 20, 50, 100, 200, 500, 1000];
 const TAU = Math.PI * 2;
@@ -73,11 +78,14 @@ const state = {
   spent: 0,
   status: "ready",
   isHolding: false,
+  diveSide: null,
   sharksEnabled: true,
   fakePlayersEnabled: false,
   goldenBubblesEnabled: false,
   lastTickDepth: 0,
   hookY: hookDiveY,
+  hookX: hookCenterX,
+  targetHookX: hookCenterX,
   messageTimer: 0,
   bubbles: [],
   effects: [],
@@ -86,8 +94,6 @@ const state = {
   goldenBubbles: [],
   fishTides: [],
   shark: null,
-  sharkCheck: null,
-  nextSharkCheckDepth: 20,
   caughtFish: null,
   bestCandidate: null,
   roundBoss: null,
@@ -330,7 +336,7 @@ function updateMusic() {
 
   const now = audioCtx.currentTime;
   const depthRatio = Math.min(1, state.depth / maxDepth);
-  const active = state.status === "diving" || state.status === "shark-check" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut";
+  const active = state.status === "diving" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut";
   const masterTarget = Math.min(0.78, (active ? 0.24 + depthRatio * 0.1 : 0.105) * musicVolumeBoost);
   const pulseTarget = active ? 0.022 + depthRatio * 0.045 : 0.004;
   const tensionTarget = depthRatio > 0.45 ? (depthRatio - 0.45) * 0.045 : 0.0001;
@@ -429,12 +435,44 @@ const sound = {
 
 function riskForDepth(depth) {
   if (depth <= 20) return { rate: 0.004, label: "LOW", color: "#78e6a3" };
-  if (depth <= 51) return { rate: 0.011, label: "MED", color: "#ffd36a" };
-  return { rate: 0.022, label: "HIGH", color: "#ff5966" };
+  if (depth <= 50) return { rate: 0.007, label: "MED", color: "#ffd36a" };
+  if (depth <= 80) return { rate: 0.01, label: "HIGH", color: "#ff9f43" };
+  return { rate: 0.014, label: "EXTREME", color: "#ff5966" };
 }
 
 function yForDepth(depth) {
   return hookDiveY + (depth - state.depth) * layerHeight;
+}
+
+function hookLineX() {
+  return state.hookX || hookCenterX;
+}
+
+function setDiveButtonsDisabled(disabled) {
+  for (const button of diveButtons) button.disabled = disabled;
+}
+
+function setDiveButtonsHeld(side) {
+  leftDiveButton?.classList.toggle("is-held", side === "left");
+  rightDiveButton?.classList.toggle("is-held", side === "right");
+}
+
+function clearDiveButtonState() {
+  for (const button of diveButtons) button.classList.remove("is-held", "is-risk");
+}
+
+function moveHookLane(side) {
+  const direction = side === "left" ? -1 : 1;
+  const minX = hookCenterX - hookLaneLimit;
+  const maxX = hookCenterX + hookLaneLimit;
+  state.targetHookX = Math.max(minX, Math.min(maxX, state.targetHookX + direction * hookLaneStep));
+}
+
+function sharkChanceForDepth(depth) {
+  if (depth <= 20) return 0.004;
+  if (depth <= 50) return 0.007;
+  if (depth <= 80) return 0.01;
+  return 0.014;
 }
 
 function normalizeAngle(angle) {
@@ -688,15 +726,16 @@ function resetRound() {
   state.spent = 0;
   state.status = "ready";
   state.isHolding = false;
+  state.diveSide = null;
   state.sharksEnabled = sharkToggle ? sharkToggle.checked : state.sharksEnabled;
   state.fakePlayersEnabled = fakePlayersToggle ? fakePlayersToggle.checked : state.fakePlayersEnabled;
   state.goldenBubblesEnabled = goldenBubbleToggle ? goldenBubbleToggle.checked : state.goldenBubblesEnabled;
   state.lastTickDepth = 0;
   state.hookY = hookDiveY;
+  state.hookX = hookCenterX;
+  state.targetHookX = hookCenterX;
   state.messageTimer = 0;
   state.shark = null;
-  state.sharkCheck = null;
-  state.nextSharkCheckDepth = 20;
   state.effects = [];
   state.rocks = [];
   state.seaPattern = chooseSeaPattern();
@@ -724,14 +763,14 @@ function resetRound() {
   state.fish = makeFish();
   state.goldenBubbles = state.goldenBubblesEnabled ? makeGoldenBubbles() : [];
   resultPanel.classList.add("hidden");
-  deepButton.classList.remove("is-risk", "is-held");
+  clearDiveButtonState();
   if (resultBreakdown) {
     resultBreakdown.innerHTML = "";
     resultBreakdown.classList.add("hidden");
   }
   newRoundButton.textContent = "NEW ROUND";
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
-  deepButton.disabled = state.balance < bet();
+  setDiveButtonsDisabled(state.balance < bet());
   pullButton.disabled = true;
   updateHud();
 }
@@ -838,18 +877,14 @@ function updateHud() {
 function refillBalanceForDev() {
   state.balance = 10000;
   if (state.status === "ready") {
-    deepButton.disabled = state.balance < bet();
+    setDiveButtonsDisabled(state.balance < bet());
   }
   updateHud();
 }
 
-function beginDive() {
+function beginDive(side) {
   ensureAudio();
   ensureMusic();
-  if (state.status === "shark-check") {
-    resolveSharkCheck();
-    return;
-  }
 
   if (state.status === "ready") {
     if (state.balance < bet()) {
@@ -868,20 +903,23 @@ function beginDive() {
       return;
     }
     state.isHolding = true;
-    deepButton.classList.add("is-held");
+    state.diveSide = side;
+    setDiveButtonsHeld(side);
     sound.dive();
   }
 }
 
 function stopDive() {
   state.isHolding = false;
-  deepButton.classList.remove("is-held");
+  state.diveSide = null;
+  clearDiveButtonState();
 }
 
 function pauseForNoBalance() {
   state.isHolding = false;
-  deepButton.classList.remove("is-held");
-  deepButton.disabled = true;
+  state.diveSide = null;
+  clearDiveButtonState();
+  setDiveButtonsDisabled(true);
   pullButton.disabled = state.depth <= 0;
 }
 
@@ -908,7 +946,7 @@ function startPull() {
   ensureMusic();
   state.status = "shuffle";
   state.isHolding = false;
-  state.sharkCheck = null;
+  state.diveSide = null;
   state.bossOmenTimer = 0;
   state.pullProgress = 0;
   state.pullStartDepth = state.depth;
@@ -918,8 +956,8 @@ function startPull() {
   state.hookShakeTimer = pullShakeDuration;
   state.rocks = [];
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
-  deepButton.disabled = true;
-  deepButton.classList.remove("is-risk", "is-held");
+  setDiveButtonsDisabled(true);
+  clearDiveButtonState();
   pullButton.disabled = true;
   sound.pull();
 }
@@ -951,7 +989,7 @@ function triggerPullSurge() {
   longestShuffle = Math.max(0.5, longestShuffle);
   state.effects.push({
     type: "pull-surge",
-    x: W / 2,
+    x: hookLineX(),
     y: hookDiveY,
     timer: 0,
     duration: longestShuffle,
@@ -982,7 +1020,7 @@ function finishPullShuffle() {
 }
 
 function sinkStep(dt) {
-  if (!state.isHolding || state.status !== "diving") return;
+  if (!state.isHolding || state.status !== "diving" || !state.diveSide) return;
 
   if (state.balance < bet()) {
     pauseForNoBalance();
@@ -1002,10 +1040,11 @@ function sinkStep(dt) {
     state.lastTickDepth += 1;
     state.spent += bet();
     state.balance -= bet();
+    moveHookLane(state.diveSide);
     sound.tick();
 
-    if (state.sharksEnabled && state.lastTickDepth >= state.nextSharkCheckDepth && state.lastTickDepth < maxDepth) {
-      pauseForSharkCheck(state.nextSharkCheckDepth);
+    if (state.sharksEnabled && state.lastTickDepth < maxDepth && Math.random() < sharkChanceForDepth(state.lastTickDepth)) {
+      triggerShark(state.diveSide);
       return;
     }
 
@@ -1025,70 +1064,25 @@ function pauseAtBottom() {
   state.depth = maxDepth;
   state.hookY = yForDepth(state.depth);
   state.isHolding = false;
-  deepButton.classList.remove("is-held");
-  deepButton.disabled = true;
+  state.diveSide = null;
+  clearDiveButtonState();
+  setDiveButtonsDisabled(true);
   pullButton.disabled = false;
 }
 
-function pauseForSharkCheck(depth) {
-  state.status = "shark-check";
-  state.isHolding = false;
-  state.depth = depth;
-  state.hookY = yForDepth(state.depth);
-  state.nextSharkCheckDepth = depth + 20;
-  state.sharkCheck = {
-    depth,
-    biteLane: null,
-    hit: false,
-    timer: 0,
-    resolved: false,
-  };
-  deepButton.classList.remove("is-held");
-  deepButton.classList.add("is-risk");
-  deepButton.disabled = false;
-  pullButton.disabled = false;
-  sound.safe();
-}
-
-function resolveSharkCheck() {
-  if (!state.sharkCheck || state.sharkCheck.resolved) return;
-  const biteLane = Math.floor(Math.random() * 5);
-  const hit = biteLane === 2;
-  state.sharkCheck.biteLane = biteLane;
-  state.sharkCheck.hit = hit;
-  state.sharkCheck.timer = 0.85;
-  state.sharkCheck.resolved = true;
-  deepButton.disabled = true;
-  pullButton.disabled = true;
-  sound.shark();
-}
-
-function finishSharkCheck() {
-  if (!state.sharkCheck) return;
-  const hit = state.sharkCheck.hit;
-  if (hit) {
-    triggerShark();
-    return;
-  }
-
-  state.status = "diving";
-  state.isHolding = false;
-  state.sharkCheck = null;
-  deepButton.classList.remove("is-risk", "is-held");
-  deepButton.disabled = state.balance < bet();
-  pullButton.disabled = false;
-  sound.safe();
-}
-
-function triggerShark() {
+function triggerShark(side = "right") {
   state.status = "cut";
   state.isHolding = false;
-  deepButton.classList.remove("is-held", "is-risk");
-  deepButton.disabled = true;
+  state.diveSide = null;
+  state.hookX = state.targetHookX;
+  clearDiveButtonState();
+  setDiveButtonsDisabled(true);
   pullButton.disabled = true;
+  const fromLeft = side === "left";
   state.shark = {
-    x: W + 160,
+    x: fromLeft ? -180 : W + 180,
     y: hookDiveY + Math.random() * 120 - 60,
+    side,
     speed: 980,
     done: false,
   };
@@ -1114,12 +1108,6 @@ function updatePullShuffle(dt) {
   }
 }
 
-function updateSharkCheck(dt) {
-  if (state.status !== "shark-check" || !state.sharkCheck?.resolved) return;
-  state.sharkCheck.timer = Math.max(0, state.sharkCheck.timer - dt);
-  if (state.sharkCheck.timer <= 0) finishSharkCheck();
-}
-
 function updatePull(dt) {
   if (state.status !== "pulling") return;
   if (state.roulette) return;
@@ -1137,7 +1125,7 @@ function updatePull(dt) {
     if (fish.depth < state.depth || fish.depth > previousDepth) continue;
 
     const fishY = yForDepth(fish.depth);
-    const distance = Math.hypot(fish.x - W / 2, fishY - hookDiveY);
+    const distance = Math.hypot(fish.x - hookLineX(), fishY - hookDiveY);
     const catchRadius = fish.isBoss ? hookCatchRadius + 52 : hookCatchRadius;
     if (distance <= catchRadius) {
       if (!makeCatchRoom(fish)) continue;
@@ -1173,7 +1161,7 @@ function makeCatchRoom(fish) {
   const [dropped] = state.caughtFish.splice(replaceIndex, 1);
   dropped.hooked = false;
   dropped.escaped = true;
-  addRockHitEffect({ x: W / 2, y: hookDiveY + 30 }, 1);
+  addRockHitEffect({ x: hookLineX(), y: hookDiveY + 30 }, 1);
   return true;
 }
 
@@ -1185,7 +1173,7 @@ function maybeTriggerGoldenBubble(previousDepth) {
     if (bubble.depth < state.depth || bubble.depth > previousDepth) continue;
 
     const bubbleY = yForDepth(bubble.depth);
-    const distance = Math.hypot(bubble.x - W / 2, bubbleY - hookDiveY);
+    const distance = Math.hypot(bubble.x - hookLineX(), bubbleY - hookDiveY);
     if (distance <= hookCatchRadius + bubble.r * goldenBubbleHitScale) {
       bubble.triggered = true;
       startGoldenBubbleRoulette();
@@ -1207,7 +1195,7 @@ function updateOctopusCollector(dt) {
     .map((fish) => ({
       fish,
       y: yForDepth(fish.depth),
-      distance: Math.hypot(fish.x - W / 2, yForDepth(fish.depth) - hookDiveY),
+      distance: Math.hypot(fish.x - hookLineX(), yForDepth(fish.depth) - hookDiveY),
     }))
     .filter((item) => item.y > hookTop + 40 && item.y < H - 210 && item.distance < 165)
     .sort((a, b) => a.distance - b.distance);
@@ -1319,7 +1307,7 @@ function updateCaughtFishChain(dt) {
   let yOffset = 64;
   state.caughtFish.forEach((fish, index) => {
     fish.chainIndex = index;
-    fish.x += (W / 2 + Math.sin(state.time * 7 + index) * 18 - fish.x) * Math.min(1, dt * 9);
+    fish.x += (hookLineX() + Math.sin(state.time * 7 + index) * 18 - fish.x) * Math.min(1, dt * 9);
     fish.y = hookDiveY + yOffset;
     yOffset += fish.isBoss ? Math.max(56, fish.size * 0.46) : 26;
   });
@@ -1331,7 +1319,7 @@ function checkRockHits() {
     if (rock.cooldown > 0) continue;
     const nearChain = state.caughtFish.some((fish) => Math.abs(rock.y - (fish.y || hookDiveY)) < 54);
     if (!nearChain) continue;
-    if (Math.abs(rock.x - W / 2) > rock.w * 0.5 + 34) continue;
+    if (Math.abs(rock.x - hookLineX()) > rock.w * 0.5 + 34) continue;
 
     const dropCount = 1 + Math.floor(Math.random() * state.caughtFish.length);
     dropCaughtFish(dropCount, rock);
@@ -1824,8 +1812,8 @@ function showResult(kicker, title, body, canRestart, buttonText = "NEW ROUND", b
   }
   resultPanel.classList.remove("hidden");
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
-  deepButton.classList.remove("is-held", "is-risk");
-  deepButton.disabled = true;
+  clearDiveButtonState();
+  setDiveButtonsDisabled(true);
   pullButton.disabled = true;
   newRoundButton.disabled = !canRestart;
   newRoundButton.textContent = buttonText;
@@ -1836,14 +1824,24 @@ function showResult(kicker, title, body, canRestart, buttonText = "NEW ROUND", b
 
 function updateShark(dt) {
   if (!state.shark) return;
-  state.shark.x -= state.shark.speed * dt;
-  if (!state.shark.done && state.shark.x < W / 2 + 35) {
+  const direction = state.shark.side === "left" ? 1 : -1;
+  state.shark.x += direction * state.shark.speed * dt;
+  const biteX = hookLineX();
+  const reachedLine = state.shark.side === "left"
+    ? state.shark.x > biteX - 35
+    : state.shark.x < biteX + 35;
+  if (!state.shark.done && reachedLine) {
     state.shark.done = true;
     state.hookY += 20;
   }
-  if (state.shark.x < -260) {
+  if ((state.shark.side === "left" && state.shark.x > W + 260) || (state.shark.side !== "left" && state.shark.x < -260)) {
     showResult("LINE CUT", "Saw Shark Strike", `The line snapped at ${Math.floor(state.depth)}F. Payout is $0.`, true);
   }
+}
+
+function updateHookLane(dt) {
+  const speed = state.status === "pulling" || state.status === "shuffle" ? 7 : 10;
+  state.hookX += (state.targetHookX - state.hookX) * Math.min(1, dt * speed);
 }
 
 function updateFish(dt) {
@@ -1882,7 +1880,7 @@ function updateFish(dt) {
 function addDoubleEffect(fish) {
   state.effects.push({
     type: "double",
-    x: W / 2,
+    x: hookLineX(),
     y: hookDiveY + 62,
     timer: 0,
     duration: 1.1,
@@ -1905,7 +1903,7 @@ function addCollectorEffect(fish, boss) {
 function addRockHitEffect(rock, count) {
   state.effects.push({
     type: "rock-hit",
-    x: W / 2,
+    x: hookLineX(),
     y: hookDiveY + 30,
     timer: 0,
     duration: 1.0,
@@ -2013,6 +2011,7 @@ function addBubbles(dt) {
 
 function drawBackground() {
   const depthRatio = Math.min(1, state.depth / maxDepth);
+  const laneShift = (hookLineX() - hookCenterX) * 0.18;
   const sea = ctx.createLinearGradient(0, 0, 0, H);
   sea.addColorStop(0, depthRatio < 0.2 ? "#61c2df" : depthRatio < 0.62 ? "#2b8fb1" : "#1c6d94");
   sea.addColorStop(0.18, depthRatio < 0.52 ? "#127aa7" : "#126888");
@@ -2026,9 +2025,9 @@ function drawBackground() {
   for (let i = 0; i < 7; i += 1) {
     const y = 92 + i * 21 + Math.sin(state.time * 1.4 + i) * 5;
     ctx.beginPath();
-    ctx.moveTo(0, y);
+    ctx.moveTo(laneShift - 40, y);
     for (let x = 0; x <= W; x += 24) {
-      ctx.lineTo(x, y + Math.sin(x * 0.025 + state.time * 2 + i) * 12);
+      ctx.lineTo(x + laneShift, y + Math.sin(x * 0.025 + state.time * 2 + i) * 12);
     }
     ctx.strokeStyle = i < 3 ? "#dbfbff" : "#76d5ec";
     ctx.lineWidth = i < 2 ? 5 : 2;
@@ -2042,7 +2041,7 @@ function drawBackground() {
     ctx.strokeStyle = "#9eeaff";
     ctx.lineWidth = 28;
     for (let i = 0; i < 3; i += 1) {
-      const x = 115 + i * 230 + Math.sin(state.time * 0.35 + i) * 26;
+      const x = 115 + i * 230 + laneShift + Math.sin(state.time * 0.35 + i) * 26;
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x - 70, H);
@@ -2062,14 +2061,14 @@ function drawBackground() {
 function drawDepthShade(depthRatio) {
   const haze = Math.min(0.28, depthRatio * 0.22);
   const edgeDarkness = Math.min(0.42, depthRatio * 0.34);
-  const danger = riskForDepth(Math.max(1, state.depth)).label === "HIGH";
+  const danger = riskForDepth(Math.max(1, state.depth)).rate >= 0.01;
 
   ctx.save();
   ctx.fillStyle = `rgba(11, 54, 86, ${haze})`;
   ctx.fillRect(0, 0, W, H);
 
   if (depthRatio > 0.2) {
-    const vignette = ctx.createRadialGradient(W / 2, hookDiveY, 80, W / 2, hookDiveY, 560);
+    const vignette = ctx.createRadialGradient(hookLineX(), hookDiveY, 80, hookLineX(), hookDiveY, 560);
     vignette.addColorStop(0, "rgba(170, 244, 255, 0.12)");
     vignette.addColorStop(0.34, "rgba(0, 0, 0, 0)");
     vignette.addColorStop(1, `rgba(0, 11, 28, ${edgeDarkness})`);
@@ -2078,7 +2077,7 @@ function drawDepthShade(depthRatio) {
   }
 
   if (depthRatio > 0.35) {
-    const lamp = ctx.createRadialGradient(W / 2, hookDiveY, 20, W / 2, hookDiveY, 230);
+    const lamp = ctx.createRadialGradient(hookLineX(), hookDiveY, 20, hookLineX(), hookDiveY, 230);
     lamp.addColorStop(0, `rgba(195, 249, 255, ${0.13 + depthRatio * 0.07})`);
     lamp.addColorStop(0.55, `rgba(108, 213, 236, ${0.06 + depthRatio * 0.035})`);
     lamp.addColorStop(1, "rgba(108, 213, 236, 0)");
@@ -2359,7 +2358,7 @@ function drawHook() {
   const shake = state.hookShakeTimer > 0
     ? Math.sin(state.time * 105) * 18 * Math.min(1, state.hookShakeTimer / pullShakeDuration)
     : 0;
-  const x = W / 2 + shake;
+  const x = hookLineX() + shake;
   const y = state.hookY;
   ctx.save();
 
@@ -2382,15 +2381,17 @@ function drawHook() {
   ctx.lineWidth = 9;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(x, 72);
+  ctx.moveTo(hookCenterX, 72);
   ctx.lineTo(x, y - 42);
   ctx.stroke();
 
   ctx.strokeStyle = "rgba(255, 231, 154, 0.8)";
   ctx.lineWidth = 3;
   for (let cy = 98; cy < y - 44; cy += 24) {
+    const t = (cy - 72) / Math.max(1, y - 116);
+    const chainX = hookCenterX + (x - hookCenterX) * Math.max(0, Math.min(1, t));
     ctx.beginPath();
-    ctx.ellipse(x, cy, 9, 15, 0.25, 0, Math.PI * 2);
+    ctx.ellipse(chainX, cy, 9, 15, 0.25, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -3396,6 +3397,7 @@ function drawShark() {
   const s = state.shark;
   ctx.save();
   ctx.translate(s.x, s.y);
+  if (s.side === "left") ctx.scale(-1, 1);
   ctx.fillStyle = "#7f929c";
   ctx.strokeStyle = "#1a2730";
   ctx.lineWidth = 5;
@@ -3437,83 +3439,6 @@ function drawShark() {
     ctx.moveTo(-140 + i * 10, 12);
     ctx.lineTo(-135 + i * 10, 28);
     ctx.lineTo(-130 + i * 10, 12);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawSharkCheck() {
-  if (state.status !== "shark-check" || !state.sharkCheck) return;
-  const check = state.sharkCheck;
-  const laneCount = 5;
-  const gap = 6;
-  const laneW = 74;
-  const laneH = 54;
-  const totalW = laneCount * laneW + (laneCount - 1) * gap;
-  const startX = W / 2 - totalW / 2;
-  const y = hookDiveY - 18;
-
-  ctx.save();
-  ctx.globalAlpha = 0.98;
-  ctx.fillStyle = "rgba(29, 4, 13, 0.82)";
-  ctx.strokeStyle = "#ff314f";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.roundRect(startX - 16, y - 50, totalW + 32, laneH + 100, 12);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#fff6da";
-  ctx.font = "950 25px Trebuchet MS";
-  ctx.fillText(`${Math.floor(check.depth)}F SAW SHARK CHECK`, W / 2, y - 72);
-  ctx.font = "850 15px Trebuchet MS";
-  ctx.fillStyle = "#ff9aa7";
-  ctx.fillText(check.resolved ? "WATCH THE BITE" : "PRESS RED GO DEEP TO RISK 1/5", W / 2, y + 90);
-
-  for (let i = 0; i < laneCount; i += 1) {
-    const x = startX + i * (laneW + gap);
-    const isLine = i === 2;
-    const isBite = check.biteLane === i;
-    ctx.fillStyle = isBite ? "#ff314f" : isLine ? "rgba(255, 211, 106, 0.26)" : "rgba(255, 255, 255, 0.1)";
-    ctx.strokeStyle = isLine ? "#ffd36a" : "#ff6b7b";
-    ctx.lineWidth = isLine ? 4 : 2;
-    ctx.beginPath();
-    ctx.roundRect(x, y - laneH / 2, laneW, laneH, 8);
-    ctx.fill();
-    ctx.stroke();
-
-    if (isBite) {
-      drawSharkMouth(x + laneW / 2, y, check.hit);
-    }
-  }
-
-  ctx.restore();
-}
-
-function drawSharkMouth(x, y, hit) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = hit ? "#25020a" : "#36131c";
-  ctx.strokeStyle = hit ? "#fff1a8" : "#ffd1d6";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 28, 20, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#fff";
-  for (let i = -2; i <= 2; i += 1) {
-    ctx.beginPath();
-    ctx.moveTo(i * 9, -18);
-    ctx.lineTo(i * 9 + 5, -4);
-    ctx.lineTo(i * 9 + 10, -18);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(i * 9, 18);
-    ctx.lineTo(i * 9 + 5, 4);
-    ctx.lineTo(i * 9 + 10, 18);
     ctx.closePath();
     ctx.fill();
   }
@@ -3592,7 +3517,6 @@ function render() {
   drawPullRocks();
   drawHook();
   drawShark();
-  drawSharkCheck();
   drawEffects();
   drawFakeEvents();
   drawDepthShade(Math.min(1, state.depth / maxDepth));
@@ -3604,9 +3528,9 @@ function render() {
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(255, 246, 218, 0.88)";
     ctx.font = "900 34px Trebuchet MS";
-    ctx.fillText("HOLD GO DEEP", W / 2, 250);
+    ctx.fillText("HOLD LEFT OR RIGHT", W / 2, 250);
     ctx.font = "700 20px Trebuchet MS";
-    ctx.fillText("Each layer costs 1 bet. Pull up before the strike.", W / 2, 284);
+    ctx.fillText("Each layer costs 1 bet. Every side has shark risk.", W / 2, 284);
     ctx.restore();
   }
 }
@@ -3616,10 +3540,10 @@ function frame(now) {
   const dt = Math.min(0.04, (now - state.previousNow) / 1000);
   state.previousNow = now;
   state.time += dt;
+  updateHookLane(dt);
 
   sinkStep(dt);
   updatePullShuffle(dt);
-  updateSharkCheck(dt);
   updateRoulette(dt);
   updateGoldenBubbles(dt);
   updatePull(dt);
@@ -3636,27 +3560,33 @@ function frame(now) {
 }
 
 function changeBet(delta) {
-  if (state.status === "diving" || state.status === "shark-check" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut") return;
+  if (state.status === "diving" || state.status === "shuffle" || state.status === "pulling" || state.status === "cut") return;
   state.betIndex = Math.max(0, Math.min(betSteps.length - 1, state.betIndex + delta));
-  deepButton.disabled = state.balance < bet();
+  setDiveButtonsDisabled(state.balance < bet());
   updateHud();
 }
 
-deepButton.addEventListener("pointerdown", (event) => {
-  event.preventDefault();
-  deepButton.setPointerCapture(event.pointerId);
-  beginDive();
-});
+function bindDiveButton(button, side) {
+  if (!button) return;
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    button.setPointerCapture(event.pointerId);
+    beginDive(side);
+  });
 
-deepButton.addEventListener("pointerup", (event) => {
-  event.preventDefault();
-  stopDive();
-});
+  button.addEventListener("pointerup", (event) => {
+    event.preventDefault();
+    stopDive();
+  });
 
-deepButton.addEventListener("pointercancel", stopDive);
-deepButton.addEventListener("lostpointercapture", () => {
-  if (state.isHolding) stopDive();
-});
+  button.addEventListener("pointercancel", stopDive);
+  button.addEventListener("lostpointercapture", () => {
+    if (state.isHolding) stopDive();
+  });
+}
+
+bindDiveButton(leftDiveButton, "left");
+bindDiveButton(rightDiveButton, "right");
 window.addEventListener("pointerup", () => {
   if (state.isHolding) stopDive();
 });

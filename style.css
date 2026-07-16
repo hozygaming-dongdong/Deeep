@@ -306,8 +306,8 @@ strong {
   bottom: 16px;
   left: 12px;
   display: grid;
-  grid-template-columns: 1fr 1.24fr 1fr;
-  gap: 10px;
+  grid-template-columns: 0.95fr 1fr 1.08fr 1fr;
+  gap: 8px;
   align-items: end;
 }
 
@@ -364,6 +364,16 @@ strong {
   height: 84px;
   background: linear-gradient(#7d94a6 0%, #26384a 52%, #16283c 100%);
   border-color: #9c8568;
+}
+
+.lane-left {
+  background: linear-gradient(#46a8d8 0%, #176988 52%, #123149 100%);
+  border-color: #9be7ff;
+}
+
+.lane-right {
+  background: linear-gradient(#38b995 0%, #13705d 52%, #113b34 100%);
+  border-color: #ffd36a;
 }
 
 .deep-button.is-held {
@@ -699,17 +709,18 @@ strong {
   }
 
   .controls {
-    grid-template-columns: 1fr 1.1fr 1fr;
-    gap: 7px;
+    grid-template-columns: 0.9fr 1fr 1fr 1fr;
+    gap: 5px;
   }
 
   .bet-panel,
   .main-button {
-    height: 68px;
+    height: 64px;
   }
 
   .deep-button {
-    height: 76px;
+    height: 70px;
+    font-size: 15px;
   }
 
   .school-rule-board {

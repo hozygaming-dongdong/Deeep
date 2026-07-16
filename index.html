@@ -29,7 +29,7 @@
         <div class="result-panel hidden" id="resultPanel">
           <p id="resultKicker">READY</p>
           <h1 id="resultTitle">Deep Hook</h1>
-          <p id="resultBody">Hold GO DEEP to sink. Release or pull up before the shark cuts the line.</p>
+          <p id="resultBody">Hold LEFT or RIGHT to sink. Release or pull up before the shark cuts the line.</p>
           <div id="resultBreakdown" class="result-breakdown hidden"></div>
           <button id="newRoundButton" type="button">NEW ROUND</button>
         </div>
@@ -41,16 +41,17 @@
 
         <div class="controls">
           <div class="bet-panel">
-            <button id="betDownButton" class="small-button" type="button" aria-label="Decrease bet">‹</button>
+            <button id="betDownButton" class="small-button" type="button" aria-label="Decrease bet">-</button>
             <div>
               <span class="label">BET</span>
               <strong id="betText">100</strong>
             </div>
-            <button id="betUpButton" class="small-button" type="button" aria-label="Increase bet">›</button>
+            <button id="betUpButton" class="small-button" type="button" aria-label="Increase bet">+</button>
           </div>
 
-          <button id="deepButton" class="main-button deep-button" type="button">GO DEEP</button>
+          <button id="leftDiveButton" class="main-button deep-button lane-button lane-left" type="button">LEFT</button>
           <button id="pullButton" class="main-button pull-button" type="button">PULL UP</button>
+          <button id="rightDiveButton" class="main-button deep-button lane-button lane-right" type="button">RIGHT</button>
         </div>
 
         <div class="hud hud-bottom">
