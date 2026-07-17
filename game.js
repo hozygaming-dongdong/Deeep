@@ -165,7 +165,7 @@ const seaPatterns = [
 const bossCatalog = {
   crimson: {
     name: "Crimson Leviathan",
-    mult: 110,
+    mult: 220,
     minDepth: 80,
     catchRate: 0.82,
     holdRate: 1,
@@ -179,7 +179,7 @@ const bossCatalog = {
   },
   octopus: {
     name: "Abyss Octopus",
-    mult: 90,
+    mult: 180,
     minDepth: 80,
     catchRate: 0.82,
     holdRate: 1,
@@ -193,7 +193,7 @@ const bossCatalog = {
   },
   mystery: {
     name: "Golden Pearl Clam",
-    mult: 100,
+    mult: 200,
     minDepth: 80,
     catchRate: 0.82,
     holdRate: 1,
@@ -207,7 +207,7 @@ const bossCatalog = {
   },
   tideLord: {
     name: "Emerald Tide Lord",
-    mult: 180,
+    mult: 360,
     minDepth: 70,
     catchRate: 0.76,
     holdRate: 1,
@@ -221,7 +221,7 @@ const bossCatalog = {
   },
   voidManta: {
     name: "Void Manta",
-    mult: 260,
+    mult: 520,
     minDepth: 70,
     catchRate: 0.72,
     holdRate: 1,
@@ -735,6 +735,18 @@ function chooseRoundBosses() {
     .map((item) => item.boss);
 }
 
+function chooseBottomBoss() {
+  const options = bossChanceItems().filter((item) => item.weight > 0);
+  if (!options.length || Math.random() >= 0.45) return null;
+  const totalWeight = options.reduce((total, item) => total + item.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const item of options) {
+    roll -= item.weight;
+    if (roll <= 0) return item.boss;
+  }
+  return options[0].boss;
+}
+
 function chooseSeaPattern() {
   return seaPatterns[Math.floor(Math.random() * seaPatterns.length)];
 }
@@ -841,6 +853,14 @@ function resetRound() {
     boss,
     side: randomBossSide(),
   }));
+  const bottomBoss = chooseBottomBoss();
+  if (bottomBoss) {
+    state.roundBosses.push({
+      boss: bottomBoss,
+      side: randomBossSide(),
+      bottom: true,
+    });
+  }
   state.roundBoss = state.roundBosses[0]?.boss || null;
   state.roundBossSide = state.roundBosses[0]?.side || null;
   state.bossOmens = state.roundBosses.map((item) => {
@@ -879,7 +899,7 @@ function resetRound() {
 function makeFish() {
   const fish = [];
 
-  for (let depth = 1.2; depth < maxDepth; depth += 0.48 + Math.random() * 0.42) {
+  for (let depth = 1.2; depth < maxDepth; depth += 0.32 + Math.random() * 0.28) {
     const tide = fishTideForDepth(depth);
     const item = tide ? tide.item : specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
@@ -910,7 +930,9 @@ function makeFish() {
 
   for (const bossEntry of state.roundBosses) {
     const boss = bossEntry.boss;
-    const bossDepth = bossMinDepth + Math.random() * (maxDepth - bossMinDepth - 2);
+    const bossDepth = bossEntry.bottom
+      ? maxDepth - 1.8 + Math.random() * 1.55
+      : bossMinDepth + Math.random() * (maxDepth - bossMinDepth - 2);
     const bossWorldX = worldXForBossSide(bossEntry.side);
     if (bossEntry.omen) {
       bossEntry.omen.targetWorldX = bossWorldX;
