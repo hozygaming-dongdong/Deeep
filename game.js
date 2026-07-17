@@ -1030,17 +1030,15 @@ function pauseAtBottom() {
 }
 
 function makeShark(side, mode) {
-  const fromLeft = side === "left";
   return {
-    x: fromLeft ? -180 : W + 180,
-    y: mode === "miss"
-      ? hookDiveY + (side === "left" ? -92 : 92)
-      : hookDiveY + Math.random() * 90 - 45,
     side,
     mode,
-    speed: mode === "miss" ? 1120 : 980,
-    done: false,
+    y: hookDiveY + (mode === "miss" ? (side === "left" ? -48 : 48) : 0),
+    timer: 0,
+    duration: mode === "miss" ? 0.62 : 0.82,
+    biteDone: false,
     biteTimer: 0,
+    splashX: mode === "miss" ? (side === "left" ? W * 0.25 : W * 0.75) : hookLineX(),
   };
 }
 
@@ -1701,26 +1699,22 @@ function showResult(kicker, title, body, canRestart, buttonText = "NEW ROUND", b
 
 function updateShark(dt) {
   if (!state.shark) return;
-  const direction = state.shark.side === "left" ? 1 : -1;
-  state.shark.x += direction * state.shark.speed * dt;
+  state.shark.timer += dt;
   state.shark.biteTimer = Math.max(0, (state.shark.biteTimer || 0) - dt);
-  const biteX = state.shark.mode === "miss"
-    ? state.shark.side === "left" ? W * 0.24 : W * 0.76
-    : hookLineX();
-  const reachedLine = state.shark.side === "left"
-    ? state.shark.x > biteX - 35
-    : state.shark.x < biteX + 35;
-  if (!state.shark.done && reachedLine) {
-    state.shark.done = true;
+  const progress = Math.min(1, state.shark.timer / state.shark.duration);
+  if (!state.shark.biteDone && progress >= 0.42) {
+    state.shark.biteDone = true;
     state.shark.biteTimer = 0.42;
     if (state.shark.mode !== "miss") state.hookY += 20;
   }
-  if ((state.shark.side === "left" && state.shark.x > W + 260) || (state.shark.side !== "left" && state.shark.x < -260)) {
+
+  if (progress >= 1) {
     if (state.shark.mode === "miss") {
       state.shark = null;
-    } else {
-      showResult("LINE CUT", "Saw Shark Strike", `The line snapped at ${Math.floor(state.depth)}F. Payout is $0.`, true);
+      return;
     }
+    state.shark = null;
+    showResult("LINE CUT", "Saw Shark Strike", `The line snapped at ${Math.floor(state.depth)}F. Payout is $0.`, true);
   }
 }
 
@@ -3113,64 +3107,81 @@ function updateBossOmenOverlay(dt) {
 function drawShark() {
   if (!state.shark) return;
   const s = state.shark;
-  const biteX = s.mode === "miss"
-    ? s.side === "left" ? W * 0.24 : W * 0.76
-    : hookLineX();
+  const progress = Math.min(1, s.timer / s.duration);
+  const slam = progress < 0.42 ? progress / 0.42 : Math.max(0, 1 - (progress - 0.42) / 0.58);
+  const open = 1 - Math.min(1, slam) * 0.72;
+  const edgeX = W * 0.48;
+  const y = s.y;
+
   ctx.save();
-  ctx.translate(s.x, s.y);
-  if (s.side === "left") ctx.scale(-1, 1);
-  ctx.fillStyle = "#7f929c";
-  ctx.strokeStyle = "#1a2730";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 145, 42, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  if (s.side === "right") {
+    ctx.translate(W, 0);
+    ctx.scale(-1, 1);
+  }
 
-  ctx.fillStyle = "#5b6c76";
+  const jawTop = y - 165 * open;
+  const jawBottom = y + 165 * open;
+  const biteEdge = edgeX + Math.sin(progress * Math.PI) * 22;
+
+  ctx.globalAlpha = 0.42;
+  ctx.fillStyle = s.mode === "miss" ? "rgba(137, 221, 255, 0.22)" : "rgba(255, 49, 79, 0.25)";
+  ctx.fillRect(0, y - 220, W * 0.54, 440);
+
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#111923";
   ctx.beginPath();
-  ctx.moveTo(98, -4);
-  ctx.lineTo(180, -54);
-  ctx.lineTo(168, 22);
+  ctx.ellipse(biteEdge - 185, y, 300, 190, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#6e8794";
+  ctx.strokeStyle = "#182733";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(-80, y - 250);
+  ctx.quadraticCurveTo(130, y - 270, biteEdge + 18, jawTop);
+  ctx.quadraticCurveTo(190, y - 115, -80, y - 74);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(-28, -34);
-  ctx.lineTo(-58, -104);
-  ctx.lineTo(10, -35);
+  ctx.moveTo(-80, y + 250);
+  ctx.quadraticCurveTo(130, y + 270, biteEdge + 18, jawBottom);
+  ctx.quadraticCurveTo(190, y + 115, -80, y + 74);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#e7f4f3";
+  ctx.fillStyle = "#dceff0";
   ctx.beginPath();
-  ctx.ellipse(-83, 2, 55, 28, 0, 0, Math.PI);
+  ctx.ellipse(biteEdge - 72, y - 86, 26, 17, -0.35, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#071018";
+  ctx.beginPath();
+  ctx.arc(biteEdge - 62, y - 88, 7, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#111";
-  ctx.beginPath();
-  ctx.arc(-102, -17, 7, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "#fff";
-  for (let i = 0; i < 8; i += 1) {
+  ctx.fillStyle = "#fff7e0";
+  ctx.strokeStyle = "#4d1f18";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 11; i += 1) {
+    const ty = jawTop + 18 + i * 17;
     ctx.beginPath();
-    ctx.moveTo(-140 + i * 10, 12);
-    ctx.lineTo(-135 + i * 10, 28);
-    ctx.lineTo(-130 + i * 10, 12);
+    ctx.moveTo(biteEdge - 4, ty);
+    ctx.lineTo(biteEdge + 42, ty + 8);
+    ctx.lineTo(biteEdge - 4, ty + 16);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
   }
   ctx.restore();
 
-  if (s.done && s.biteTimer > 0) {
+  if (s.biteDone && s.biteTimer > 0) {
     const progress = 1 - s.biteTimer / 0.42;
     const alpha = Math.max(0, 1 - progress);
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(biteX, s.y);
+    ctx.translate(s.splashX, s.y);
     ctx.strokeStyle = s.mode === "miss" ? "#c9f6ff" : "#ff5966";
     ctx.fillStyle = s.mode === "miss" ? "rgba(201, 246, 255, 0.2)" : "rgba(255, 89, 102, 0.24)";
     ctx.lineWidth = 5;
