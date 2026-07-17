@@ -2238,9 +2238,36 @@ function drawHook() {
   const shake = state.hookShakeTimer > 0
     ? Math.sin(state.time * 105) * 18 * Math.min(1, state.hookShakeTimer / pullShakeDuration)
     : 0;
-  const x = hookLineX() + shake;
+  const laneSignal = state.status === "diving" && state.diveSide
+    ? state.diveSide === "left" ? -1 : 1
+    : 0;
+  const visualOffset = laneSignal * (18 + Math.sin(state.time * 8) * 3);
+  const visualTilt = laneSignal * 0.18;
+  const x = hookLineX() + shake + visualOffset;
   const y = state.hookY;
   ctx.save();
+
+  if (laneSignal) {
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = laneSignal < 0 ? "#9be7ff" : "#ffd36a";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 5; i += 1) {
+      const trailY = y - 88 + i * 24;
+      const sway = Math.sin(state.time * 7 + i) * 8;
+      ctx.beginPath();
+      ctx.moveTo(hookLineX() - laneSignal * (18 + i * 7), trailY + sway);
+      ctx.quadraticCurveTo(
+        hookLineX() - laneSignal * (52 + i * 8),
+        trailY + 10,
+        hookLineX() - laneSignal * (82 + i * 9),
+        trailY + 2 - sway
+      );
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   if (state.status === "pulling") {
     ctx.globalAlpha = 0.18;
@@ -2276,6 +2303,7 @@ function drawHook() {
   }
 
   ctx.translate(x, y);
+  ctx.rotate(visualTilt);
   ctx.strokeStyle = "#b77929";
   ctx.lineWidth = 15;
   ctx.beginPath();
