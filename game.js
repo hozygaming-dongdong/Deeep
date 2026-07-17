@@ -57,6 +57,7 @@ const musicVolumeBoost = 1.8;
 const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
+const bossMinDepth = 70;
 const nopeColor = "#9aa3ad";
 const fishPayoutBoost = 0.45;
 const fishSizeScale = 2 / 3;
@@ -582,10 +583,17 @@ function makeFishTides() {
     if (tides.some((tide) => start < tide.end + 6 && end > tide.start - 6)) continue;
 
     const item = catalogForDepth(start + length / 2);
+    const side = Math.random() < 0.5 ? "left" : "right";
+    const centerX = side === "left"
+      ? worldMinX + 95 + Math.random() * 260
+      : worldMaxX - 355 + Math.random() * 260;
     tides.push({
       start,
       end,
       item,
+      side,
+      centerX,
+      spread: 120 + Math.random() * 90,
       phase: Math.random() * TAU,
     });
   }
@@ -703,7 +711,7 @@ function omenForBoss(boss, side) {
     side,
     color,
     text: `${boss.name.toUpperCase()} BELOW`,
-    activeFrom: 40 + Math.random() * 10,
+    activeFrom: 38 + Math.random() * 5,
   };
 }
 
@@ -719,6 +727,12 @@ function randomBossSide() {
 function worldXForBossSide(side) {
   if (side === "left") return worldMinX + 20 + Math.random() * 70;
   return worldMaxX - 90 + Math.random() * 70;
+}
+
+function worldXForTide(tide) {
+  if (!tide) return 80 + Math.random() * (worldWidth - 160);
+  const offset = (Math.random() - 0.5) * 2 * tide.spread;
+  return Math.max(68, Math.min(worldWidth - 68, tide.centerX + offset));
 }
 
 function makeFishInstance(item, index, depth, overrides = {}) {
@@ -798,15 +812,19 @@ function makeFish() {
     const tide = fishTideForDepth(depth);
     const item = tide ? tide.item : specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
-    fish.push(makeFishInstance(item, index, depth));
+    fish.push(makeFishInstance(item, index, depth, tide ? {
+      worldX: worldXForTide(tide),
+      dir: tide.side === "left" ? 1 : -1,
+      speed: 0.82 + Math.random() * 0.68,
+    } : {}));
 
     if (tide) {
       const extraCount = 2 + Math.floor(Math.random() * 3);
       for (let i = 0; i < extraCount; i += 1) {
         fish.push(makeFishInstance(item, fish.length, Math.min(tide.end, depth + Math.random() * 0.5), {
-          worldX: 80 + Math.random() * (worldWidth - 160),
+          worldX: worldXForTide(tide),
           dir: Math.random() < 0.5 ? -1 : 1,
-          speed: 0.78 + Math.random() * 0.62,
+          speed: 1.05 + Math.random() * 0.8,
         }));
       }
     }
@@ -814,7 +832,7 @@ function makeFish() {
 
   const boss = state.roundBoss;
   if (boss) {
-    const bossDepth = 82 + Math.random() * 16;
+    const bossDepth = bossMinDepth + Math.random() * (maxDepth - bossMinDepth - 2);
     fish.push(makeFishInstance(boss, fish.length, bossDepth, {
       worldX: worldXForBossSide(state.roundBossSide),
       depth: bossDepth,
@@ -3095,7 +3113,7 @@ function drawRouletteLegendItem(x, y, color, label) {
 function updateBossOmenOverlay(dt) {
   if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
 
-  if (!state.bossOmen || state.status !== "diving" || state.depth >= 82) {
+  if (!state.bossOmen || state.status !== "diving" || state.depth >= maxDepth) {
     state.bossOmenTrailTimer = 0;
     return;
   }
@@ -3210,7 +3228,7 @@ function drawShark() {
 }
 
 function drawBossOmen() {
-  if (!state.bossOmen || !state.bossOmenTriggered || state.status !== "diving" || state.depth >= 82) return;
+  if (!state.bossOmen || !state.bossOmenTriggered || state.status !== "diving" || state.depth >= maxDepth) return;
   const omen = state.bossOmen;
   const sideSign = omen.side === "left" ? -1 : 1;
   const color = omen.color;
@@ -3320,22 +3338,43 @@ function drawFishTides() {
     const height = Math.max(62, bottom - top + 60);
     const color = tide.item.accent || tide.item.color || "#ffd36a";
     const pulse = 0.5 + Math.sin(state.time * 4.2 + tide.phase) * 0.5;
-    const grad = ctx.createLinearGradient(0, y, W, y);
+    const clueX = screenX(tide.centerX);
+    const visibleX = Math.max(-140, Math.min(W + 140, clueX));
+    const sideX = tide.side === "left" ? W * 0.08 : W * 0.92;
+    const edgePulse = 0.55 + pulse * 0.25;
+    const grad = ctx.createRadialGradient(visibleX, y, 20, visibleX, y, 360);
 
-    grad.addColorStop(0, "rgba(255, 255, 255, 0)");
-    grad.addColorStop(0.5, rgbaFromHex(color, 0.12 + pulse * 0.08));
+    grad.addColorStop(0, rgbaFromHex(color, 0.2 + pulse * 0.12));
+    grad.addColorStop(0.52, rgbaFromHex(color, 0.09 + pulse * 0.06));
     grad.addColorStop(1, "rgba(255, 255, 255, 0)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, y - height / 2, W, height);
 
-    ctx.strokeStyle = rgbaFromHex(color, 0.34 + pulse * 0.24);
-    ctx.lineWidth = 3;
+    const edgeGrad = ctx.createRadialGradient(sideX, y, 8, sideX, y, 190);
+    edgeGrad.addColorStop(0, rgbaFromHex(color, 0.32 * edgePulse));
+    edgeGrad.addColorStop(0.45, rgbaFromHex(color, 0.16 * edgePulse));
+    edgeGrad.addColorStop(1, rgbaFromHex(color, 0));
+    ctx.fillStyle = edgeGrad;
+    ctx.fillRect(tide.side === "left" ? 0 : W - 260, y - height, 260, height * 2);
+
+    ctx.strokeStyle = rgbaFromHex(color, 0.4 + pulse * 0.28);
+    ctx.lineWidth = 4;
     for (let i = 0; i < 5; i += 1) {
       const lineY = y - height / 2 + 16 + (i * (height - 32)) / 4;
-      const wave = Math.sin(state.time * 3 + i + tide.phase) * 18;
+      const wave = Math.sin(state.time * 4.5 + i + tide.phase) * 24;
+      const startX = tide.side === "left" ? 24 : W - 24;
+      const endX = Math.max(80, Math.min(W - 80, visibleX));
+      const pull = tide.side === "left" ? 1 : -1;
       ctx.beginPath();
-      ctx.moveTo(34, lineY);
-      ctx.bezierCurveTo(180 + wave, lineY - 18, 360 - wave, lineY + 18, W - 34, lineY);
+      ctx.moveTo(startX, lineY);
+      ctx.bezierCurveTo(
+        startX + pull * (110 + wave),
+        lineY - 22,
+        endX - pull * (140 - wave),
+        lineY + 22,
+        endX,
+        lineY
+      );
       ctx.stroke();
     }
 
