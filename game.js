@@ -50,9 +50,9 @@ const betSteps = [10, 20, 50, 100, 200, 500, 1000];
 const TAU = Math.PI * 2;
 const doubleChance = 0.12;
 const bossDoubleChance = 0.5;
-const defaultCrimsonChance = 0.1;
-const defaultOctopusChance = 0.1;
-const defaultMysteryChance = 0.1;
+const defaultCrimsonChance = 0.2;
+const defaultOctopusChance = 0.2;
+const defaultMysteryChance = 0.2;
 const musicVolumeBoost = 1.8;
 const sfxVolumeBoost = 2.4;
 const pullShakeDuration = 0.32;
@@ -99,6 +99,8 @@ const state = {
   bossOmen: null,
   bossOmenTriggered: false,
   bossOmenTimer: 0,
+  bossOmenTrailTimer: 0,
+  roundBossSide: null,
   pullProgress: 0,
   pullStartDepth: 0,
   pullWindupTimer: 0,
@@ -677,14 +679,9 @@ function chooseRoundBoss() {
     { boss: bossCatalog.octopus, weight: chanceSliderValue(octopusChanceSlider, defaultOctopusChance) },
     { boss: bossCatalog.mystery, weight: chanceSliderValue(mysteryChanceSlider, defaultMysteryChance) },
   ];
-  const forced = weights.filter((item) => item.weight >= 1);
-  if (forced.length) {
-    return forced[Math.floor(Math.random() * forced.length)].boss;
-  }
-
   const totalWeight = weights.reduce((total, item) => total + item.weight, 0);
-  const spawnChance = Math.min(1, totalWeight);
-  if (totalWeight <= 0 || Math.random() > spawnChance) return null;
+  if (totalWeight <= 0) return null;
+  if (totalWeight <= 1 && Math.random() < 1 - totalWeight) return null;
 
   let roll = Math.random() * totalWeight;
   for (const item of weights) {
@@ -698,11 +695,12 @@ function chooseSeaPattern() {
   return seaPatterns[Math.floor(Math.random() * seaPatterns.length)];
 }
 
-function omenForBoss(boss) {
+function omenForBoss(boss, side) {
   if (!boss) return null;
   const color = boss.bossType === "octopus" ? "#b86cff" : boss.bossType === "mystery" ? "#ffd36a" : "#ff314f";
   return {
     type: boss.bossType,
+    side,
     color,
     text: `${boss.name.toUpperCase()} BELOW`,
     activeFrom: 40 + Math.random() * 10,
@@ -712,6 +710,15 @@ function omenForBoss(boss) {
 function chanceSliderValue(slider, fallback) {
   const value = slider ? Number(slider.value) / 100 : fallback;
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : fallback));
+}
+
+function randomBossSide() {
+  return Math.random() < 0.5 ? "left" : "right";
+}
+
+function worldXForBossSide(side) {
+  if (side === "left") return 180 + Math.random() * 440;
+  return worldWidth - 620 + Math.random() * 440;
 }
 
 function makeFishInstance(item, index, depth, overrides = {}) {
@@ -754,9 +761,11 @@ function resetRound() {
   state.caughtFish = [];
   state.bestCandidate = null;
   state.roundBoss = chooseRoundBoss();
-  state.bossOmen = omenForBoss(state.roundBoss);
+  state.roundBossSide = state.roundBoss ? randomBossSide() : null;
+  state.bossOmen = omenForBoss(state.roundBoss, state.roundBossSide);
   state.bossOmenTriggered = false;
   state.bossOmenTimer = 0;
+  state.bossOmenTrailTimer = 0;
   state.pullProgress = 0;
   state.pullStartDepth = 0;
   state.pullWindupTimer = 0;
@@ -807,7 +816,7 @@ function makeFish() {
   if (boss) {
     const bossDepth = 82 + Math.random() * 16;
     fish.push(makeFishInstance(boss, fish.length, bossDepth, {
-      worldX: 80 + Math.random() * (worldWidth - 160),
+      worldX: worldXForBossSide(state.roundBossSide),
       depth: bossDepth,
       dir: Math.random() < 0.5 ? 1 : -1,
       fixedMult: boss.mult,
@@ -3074,34 +3083,20 @@ function drawRouletteLegendItem(x, y, color, label) {
 }
 
 function updateBossOmenOverlay(dt) {
-  if (!bossOmenOverlay) return;
+  if (bossOmenOverlay) bossOmenOverlay.classList.add("hidden");
 
   if (!state.bossOmen || state.status !== "diving" || state.depth >= 82) {
-    bossOmenOverlay.classList.add("hidden");
-    bossOmenOverlay.classList.remove("is-alert", "is-glow");
+    state.bossOmenTrailTimer = 0;
     return;
   }
 
   if (!state.bossOmenTriggered && state.depth >= state.bossOmen.activeFrom) {
     state.bossOmenTriggered = true;
-    state.bossOmenTimer = 2.5;
-  }
-
-  if (!state.bossOmenTriggered) {
-    bossOmenOverlay.classList.add("hidden");
-    return;
+    state.bossOmenTimer = 1.15;
+    state.bossOmenTrailTimer = 999;
   }
 
   state.bossOmenTimer = Math.max(0, state.bossOmenTimer - dt);
-  const isAlert = state.bossOmenTimer > 0;
-  bossOmenOverlay.classList.toggle("hidden", false);
-  bossOmenOverlay.classList.toggle("is-alert", isAlert);
-  bossOmenOverlay.classList.toggle("is-glow", !isAlert);
-
-  if (bossOmenTitle && state.bossOmen) {
-    bossOmenTitle.textContent = state.bossOmen.text;
-    bossOmenOverlay.style.setProperty("--boss-omen-color", state.bossOmen.color);
-  }
 }
 
 function drawShark() {
@@ -3204,6 +3199,81 @@ function drawShark() {
   }
 }
 
+function drawBossOmen() {
+  if (!state.bossOmen || !state.bossOmenTriggered || state.status !== "diving" || state.depth >= 82) return;
+  const omen = state.bossOmen;
+  const sideSign = omen.side === "left" ? -1 : 1;
+  const color = omen.color;
+
+  ctx.save();
+  if (state.bossOmenTimer > 0) {
+    const progress = 1 - state.bossOmenTimer / 1.15;
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const x = W / 2 + sideSign * (80 + ease * 260);
+    const y = H * 0.62 + ease * 210;
+    const alpha = Math.max(0, 1 - progress * 0.35);
+    ctx.globalAlpha = alpha;
+
+    ctx.strokeStyle = rgbaFromHex(color, 0.42);
+    ctx.lineWidth = 18;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(W / 2, H * 0.66);
+    ctx.quadraticCurveTo(W / 2 + sideSign * 130, H * 0.76, x, y);
+    ctx.stroke();
+
+    ctx.translate(x, y);
+    ctx.scale(sideSign, 1);
+    ctx.fillStyle = rgbaFromHex(color, 0.36);
+    ctx.strokeStyle = rgbaFromHex(color, 0.82);
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 135, 54, -0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = rgbaFromHex(color, 0.72);
+    if (omen.type === "octopus") {
+      for (let i = -2; i <= 2; i += 1) {
+        ctx.beginPath();
+        ctx.moveTo(-52 + i * 24, 24);
+        ctx.quadraticCurveTo(-82 + i * 30, 78, -28 + i * 42, 112);
+        ctx.lineWidth = 9;
+        ctx.stroke();
+      }
+    } else if (omen.type === "mystery") {
+      ctx.beginPath();
+      ctx.ellipse(0, 8, 110, 46, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(-90, 0);
+      ctx.lineTo(-170, -46);
+      ctx.lineTo(-150, 52);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  const glowAlpha = state.bossOmenTimer > 0 ? 0.34 : 0.2 + Math.sin(state.time * 4) * 0.06;
+  const grad = ctx.createRadialGradient(
+    omen.side === "left" ? W * 0.15 : W * 0.85,
+    H,
+    10,
+    omen.side === "left" ? W * 0.15 : W * 0.85,
+    H,
+    300
+  );
+  grad.addColorStop(0, rgbaFromHex(color, glowAlpha));
+  grad.addColorStop(1, rgbaFromHex(color, 0));
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, H - 310, W, 310);
+  ctx.restore();
+}
+
 function drawFishTides() {
   if (!state.fishTides.length) return;
 
@@ -3247,6 +3317,7 @@ function render() {
   drawPullRocks();
   drawHook();
   drawShark();
+  drawBossOmen();
   drawEffects();
   drawDepthShade(Math.min(1, state.depth / maxDepth));
   drawRoulette();
