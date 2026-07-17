@@ -3331,30 +3331,39 @@ function drawSingleBossOmen(omen) {
     ctx.restore();
   }
 
-  const glowAlpha = timer > 0 ? 0.52 : 0.34 + Math.sin(state.time * 4) * 0.1;
-  const glowRadius = onScreen ? 310 : 430;
-  const grad = ctx.createRadialGradient(
-    clueX,
-    H,
-    10,
-    clueX,
-    H,
-    glowRadius
-  );
-  grad.addColorStop(0, rgbaFromHex(color, glowAlpha));
-  grad.addColorStop(0.42, rgbaFromHex(color, glowAlpha * 0.46));
-  grad.addColorStop(1, rgbaFromHex(color, 0));
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = grad;
-  ctx.fillRect(Math.max(0, clueX - glowRadius), H - glowRadius, glowRadius * 2, glowRadius);
-
   if (onScreen) {
-    const columnGrad = ctx.createLinearGradient(clueX, H - 430, clueX, H);
-    columnGrad.addColorStop(0, rgbaFromHex(color, 0));
-    columnGrad.addColorStop(0.42, rgbaFromHex(color, 0.16 + Math.sin(state.time * 5) * 0.04));
-    columnGrad.addColorStop(1, rgbaFromHex(color, 0.42));
+    const topGlow = 0.38 + Math.sin(state.time * 5) * 0.08;
+    const grad = ctx.createRadialGradient(clueX, hookTop + 12, 8, clueX, hookTop + 12, 260);
+    grad.addColorStop(0, rgbaFromHex(color, topGlow));
+    grad.addColorStop(0.48, rgbaFromHex(color, topGlow * 0.34));
+    grad.addColorStop(1, rgbaFromHex(color, 0));
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = grad;
+    ctx.fillRect(Math.max(0, clueX - 280), hookTop - 80, 560, 360);
+
+    const columnGrad = ctx.createLinearGradient(clueX, hookTop - 60, clueX, hookDiveY);
+    columnGrad.addColorStop(0, rgbaFromHex(color, 0.48));
+    columnGrad.addColorStop(0.55, rgbaFromHex(color, 0.18 + Math.sin(state.time * 5) * 0.04));
+    columnGrad.addColorStop(1, rgbaFromHex(color, 0));
     ctx.fillStyle = columnGrad;
-    ctx.fillRect(clueX - 72, H - 430, 144, 430);
+    ctx.fillRect(clueX - 62, hookTop - 60, 124, hookDiveY - hookTop + 60);
+  } else {
+    const glowAlpha = timer > 0 ? 0.52 : 0.34 + Math.sin(state.time * 4) * 0.1;
+    const glowRadius = 430;
+    const grad = ctx.createRadialGradient(
+      clueX,
+      H,
+      10,
+      clueX,
+      H,
+      glowRadius
+    );
+    grad.addColorStop(0, rgbaFromHex(color, glowAlpha));
+    grad.addColorStop(0.42, rgbaFromHex(color, glowAlpha * 0.46));
+    grad.addColorStop(1, rgbaFromHex(color, 0));
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = grad;
+    ctx.fillRect(Math.max(0, clueX - glowRadius), H - glowRadius, glowRadius * 2, glowRadius);
   }
 
   ctx.save();
@@ -3363,19 +3372,32 @@ function drawSingleBossOmen(omen) {
   ctx.fillStyle = rgbaFromHex(color, 0.52);
   ctx.lineWidth = 7;
   ctx.lineCap = "round";
-  const arrowY = H - 205;
+  const arrowY = onScreen ? hookTop + 56 : H - 205;
   const arrowX = clueX;
   const dir = targetScreenX < W / 2 ? -1 : 1;
-  ctx.beginPath();
-  ctx.moveTo(onScreen ? arrowX : W / 2 - dir * 20, arrowY - 34);
-  ctx.quadraticCurveTo(arrowX - dir * 70, arrowY + 2, arrowX, arrowY + 58);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(arrowX, arrowY + 58);
-  ctx.lineTo(arrowX - dir * 40, arrowY + 34);
-  ctx.lineTo(arrowX - dir * 18, arrowY + 86);
-  ctx.closePath();
-  ctx.fill();
+  if (onScreen) {
+    ctx.beginPath();
+    ctx.moveTo(arrowX, arrowY + 110);
+    ctx.quadraticCurveTo(arrowX + Math.sin(state.time * 4) * 20, arrowY + 54, arrowX, arrowY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(arrowX - 28, arrowY + 42);
+    ctx.lineTo(arrowX + 28, arrowY + 42);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - dir * 20, arrowY - 34);
+    ctx.quadraticCurveTo(arrowX - dir * 70, arrowY + 2, arrowX, arrowY + 58);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(arrowX, arrowY + 58);
+    ctx.lineTo(arrowX - dir * 40, arrowY + 34);
+    ctx.lineTo(arrowX - dir * 18, arrowY + 86);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
   ctx.restore();
 }
