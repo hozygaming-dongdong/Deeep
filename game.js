@@ -64,7 +64,7 @@ const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
 const bossMinDepth = 70;
 const nopeColor = "#9aa3ad";
-const fishPayoutBoost = 0.45;
+const fishPayoutBoost = 0.225;
 const fishSizeScale = 2 / 3;
 let audioCtx = null;
 let music = null;
@@ -894,7 +894,7 @@ function makeFish() {
     } : {}));
 
     if (tide) {
-      const extraCount = 8 + Math.floor(Math.random() * 6);
+      const extraCount = 4 + Math.floor(Math.random() * 3);
       for (let i = 0; i < extraCount; i += 1) {
         const extraCluster = clusterForTide(tide);
         fish.push(makeFishInstance(item, fish.length, depthForTide(tide, depth, extraCluster), {
