@@ -648,13 +648,29 @@ strong {
   }
 
   .controls {
-    grid-template-columns: 92px minmax(126px, 1fr) 92px;
-    gap: 5px;
+    grid-template-columns: clamp(112px, 30vw, 124px) minmax(96px, 1fr) clamp(112px, 30vw, 124px);
+    gap: 4px;
   }
 
   .bet-panel,
   .main-button {
     height: 64px;
+  }
+
+  .bet-panel {
+    grid-template-columns: 28px minmax(30px, 1fr) 28px;
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .small-button {
+    width: 28px;
+    height: 46px;
+    font-size: 30px;
+  }
+
+  #betText {
+    font-size: 17px;
   }
 
   .deep-button {
@@ -709,5 +725,26 @@ strong {
     min-height: 56px;
     margin-top: 14px;
     font-size: 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .controls {
+    grid-template-columns: 104px minmax(80px, 1fr) 104px;
+  }
+
+  .bet-panel {
+    grid-template-columns: 24px minmax(30px, 1fr) 24px;
+    gap: 3px;
+    padding: 5px;
+  }
+
+  .small-button {
+    width: 24px;
+    font-size: 26px;
+  }
+
+  #betText {
+    font-size: 15px;
   }
 }
