@@ -737,6 +737,7 @@ function omenForBoss(boss, side) {
     text: `${boss.name.toUpperCase()} BELOW`,
     activeFrom: 38 + Math.random() * 5,
     targetWorldX: null,
+    targetDepth: null,
     triggered: false,
     timer: 0,
     trailTimer: 0,
@@ -879,7 +880,10 @@ function makeFish() {
     const boss = bossEntry.boss;
     const bossDepth = bossMinDepth + Math.random() * (maxDepth - bossMinDepth - 2);
     const bossWorldX = worldXForBossSide(bossEntry.side);
-    if (bossEntry.omen) bossEntry.omen.targetWorldX = bossWorldX;
+    if (bossEntry.omen) {
+      bossEntry.omen.targetWorldX = bossWorldX;
+      bossEntry.omen.targetDepth = bossDepth;
+    }
     fish.push(makeFishInstance(boss, fish.length, bossDepth, {
       worldX: bossWorldX,
       depth: bossDepth,
@@ -3273,8 +3277,15 @@ function drawSingleBossOmen(omen) {
   const timer = omen.timer || 0;
   const targetWorldX = omen.targetWorldX ?? (omen.side === "left" ? worldMinX : worldMaxX);
   const targetScreenX = screenX(targetWorldX);
+  const targetY = Number.isFinite(omen.targetDepth) ? yForDepth(omen.targetDepth) : H + 120;
   const clueX = clueScreenX(targetWorldX, 64);
-  const onScreen = isWorldTargetOnScreen(targetWorldX, 64);
+  const horizontalOnScreen = isWorldTargetOnScreen(targetWorldX, 64);
+  const topLimit = hookTop + 16;
+  const bottomLimit = H - 230;
+  const verticalOnScreen = targetY >= topLimit && targetY <= bottomLimit;
+  const targetOnScreen = horizontalOnScreen && verticalOnScreen;
+  const targetAbove = targetY < topLimit;
+  const clueY = targetOnScreen ? targetY : targetAbove ? hookTop + 38 : H - 205;
 
   ctx.save();
   if (timer > 0) {
@@ -3331,7 +3342,27 @@ function drawSingleBossOmen(omen) {
     ctx.restore();
   }
 
-  if (onScreen) {
+  if (targetOnScreen) {
+    const markerGlow = 0.34 + Math.sin(state.time * 5.5) * 0.08;
+    const grad = ctx.createRadialGradient(clueX, clueY, 8, clueX, clueY, 230);
+    grad.addColorStop(0, rgbaFromHex(color, markerGlow));
+    grad.addColorStop(0.5, rgbaFromHex(color, markerGlow * 0.32));
+    grad.addColorStop(1, rgbaFromHex(color, 0));
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = grad;
+    ctx.fillRect(Math.max(0, clueX - 250), Math.max(0, clueY - 250), 500, 500);
+
+    ctx.save();
+    ctx.globalAlpha = 0.5 + Math.sin(state.time * 6) * 0.12;
+    ctx.strokeStyle = rgbaFromHex(color, 0.88);
+    ctx.lineWidth = 6;
+    for (let i = 0; i < 3; i += 1) {
+      ctx.beginPath();
+      ctx.arc(clueX, clueY, 34 + i * 22, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (targetAbove) {
     const topGlow = 0.38 + Math.sin(state.time * 5) * 0.08;
     const grad = ctx.createRadialGradient(clueX, hookTop + 12, 8, clueX, hookTop + 12, 260);
     grad.addColorStop(0, rgbaFromHex(color, topGlow));
@@ -3372,10 +3403,14 @@ function drawSingleBossOmen(omen) {
   ctx.fillStyle = rgbaFromHex(color, 0.52);
   ctx.lineWidth = 7;
   ctx.lineCap = "round";
-  const arrowY = onScreen ? hookTop + 56 : H - 205;
+  const arrowY = clueY;
   const arrowX = clueX;
   const dir = targetScreenX < W / 2 ? -1 : 1;
-  if (onScreen) {
+  if (targetOnScreen) {
+    ctx.beginPath();
+    ctx.arc(arrowX, arrowY, 52 + Math.sin(state.time * 5) * 5, 0, TAU);
+    ctx.stroke();
+  } else if (targetAbove) {
     ctx.beginPath();
     ctx.moveTo(arrowX, arrowY + 110);
     ctx.quadraticCurveTo(arrowX + Math.sin(state.time * 4) * 20, arrowY + 54, arrowX, arrowY);
@@ -3388,7 +3423,7 @@ function drawSingleBossOmen(omen) {
     ctx.fill();
   } else {
     ctx.beginPath();
-    ctx.moveTo(W / 2 - dir * 20, arrowY - 34);
+    ctx.moveTo(horizontalOnScreen ? arrowX : W / 2 - dir * 20, arrowY - 34);
     ctx.quadraticCurveTo(arrowX - dir * 70, arrowY + 2, arrowX, arrowY + 58);
     ctx.stroke();
     ctx.beginPath();
