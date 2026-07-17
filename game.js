@@ -794,7 +794,7 @@ function resetRound() {
 function makeFish() {
   const fish = [];
 
-  for (let depth = 1.2; depth < maxDepth; depth += 0.52 + Math.random() * 0.45) {
+  for (let depth = 1.2; depth < maxDepth; depth += 0.24 + Math.random() * 0.21) {
     const tide = fishTideForDepth(depth);
     const item = tide ? tide.item : specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
@@ -825,12 +825,22 @@ function makeFish() {
     }));
   }
 
-  fish.push(makeFishInstance(finalPrizeForDepth(), fish.length, maxDepth, {
-    worldX: worldMinX + Math.random() * (worldMaxX - worldMinX),
-    depth: maxDepth - 0.15,
-    dir: Math.random() < 0.5 ? 1 : -1,
-    catchRate: 0.34,
-  }));
+  const bottomPrizeXs = [
+    worldMinX + 36,
+    worldMinX + 170,
+    worldStartX - 100,
+    worldStartX + 100,
+    worldMaxX - 170,
+    worldMaxX - 36,
+  ];
+  for (const worldX of bottomPrizeXs) {
+    fish.push(makeFishInstance(finalPrizeForDepth(), fish.length, maxDepth, {
+      worldX,
+      depth: maxDepth - 0.15 + Math.random() * 0.12,
+      dir: Math.random() < 0.5 ? 1 : -1,
+      catchRate: 0.34,
+    }));
+  }
 
   return fish;
 }
