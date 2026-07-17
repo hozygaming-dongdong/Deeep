@@ -237,26 +237,34 @@ strong {
 }
 
 .bet-panel {
-  display: grid;
-  grid-template-columns: 34px 1fr 34px;
-  align-items: center;
-  gap: 3px;
+  position: relative;
+  display: block;
   padding: 7px;
   background: linear-gradient(#45616e, #1c3036);
   text-align: center;
   min-width: 0;
+  overflow: hidden;
 }
 
 .bet-panel > div {
+  position: absolute;
+  top: 50%;
+  right: 43px;
+  left: 43px;
   min-width: 0;
+  transform: translateY(-50%);
 }
 
 #betText {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .small-button {
+  position: absolute;
+  top: 50%;
   width: 34px;
   height: 50px;
   border-radius: 6px;
@@ -265,6 +273,15 @@ strong {
   font-size: 38px;
   font-weight: 900;
   line-height: 0.8;
+  transform: translateY(-50%);
+}
+
+.bet-panel .small-button:first-child {
+  left: 7px;
+}
+
+.bet-panel .small-button:last-child {
+  right: 7px;
 }
 
 .main-button {
@@ -667,9 +684,12 @@ strong {
   .bet-panel {
     left: 0;
     width: 112px;
-    grid-template-columns: 28px minmax(30px, 1fr) 28px;
-    gap: 4px;
     padding: 6px;
+  }
+
+  .bet-panel > div {
+    right: 30px;
+    left: 30px;
   }
 
   .dive-control {
@@ -685,13 +705,21 @@ strong {
   }
 
   .small-button {
-    width: 28px;
+    width: 24px;
     height: 46px;
-    font-size: 30px;
+    font-size: 26px;
+  }
+
+  .bet-panel .small-button:first-child {
+    left: 5px;
+  }
+
+  .bet-panel .small-button:last-child {
+    right: 5px;
   }
 
   #betText {
-    font-size: 17px;
+    font-size: 16px;
   }
 
   .deep-button {
@@ -752,9 +780,12 @@ strong {
 @media (max-width: 360px) {
   .bet-panel {
     width: 100px;
-    grid-template-columns: 24px minmax(30px, 1fr) 24px;
-    gap: 3px;
     padding: 5px;
+  }
+
+  .bet-panel > div {
+    right: 27px;
+    left: 27px;
   }
 
   .dive-control {
@@ -767,8 +798,16 @@ strong {
   }
 
   .small-button {
-    width: 24px;
-    font-size: 26px;
+    width: 22px;
+    font-size: 24px;
+  }
+
+  .bet-panel .small-button:first-child {
+    left: 5px;
+  }
+
+  .bet-panel .small-button:last-child {
+    right: 5px;
   }
 
   #betText {
