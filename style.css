@@ -648,8 +648,8 @@ strong {
   }
 
   .controls {
-    grid-template-columns: clamp(112px, 30vw, 124px) minmax(96px, 1fr) clamp(112px, 30vw, 124px);
-    gap: 4px;
+    display: block;
+    height: 72px;
   }
 
   .bet-panel,
@@ -657,10 +657,31 @@ strong {
     height: 64px;
   }
 
+  .bet-panel,
+  .dive-control,
+  .pull-button {
+    position: absolute;
+    bottom: 0;
+  }
+
   .bet-panel {
+    left: 0;
+    width: 112px;
     grid-template-columns: 28px minmax(30px, 1fr) 28px;
     gap: 4px;
     padding: 6px;
+  }
+
+  .dive-control {
+    left: 50%;
+    width: 112px;
+    transform: translateX(-50%);
+  }
+
+  .pull-button {
+    right: 0;
+    width: 112px;
+    font-size: 14px;
   }
 
   .small-button {
@@ -729,14 +750,20 @@ strong {
 }
 
 @media (max-width: 360px) {
-  .controls {
-    grid-template-columns: 104px minmax(80px, 1fr) 104px;
-  }
-
   .bet-panel {
+    width: 100px;
     grid-template-columns: 24px minmax(30px, 1fr) 24px;
     gap: 3px;
     padding: 5px;
+  }
+
+  .dive-control {
+    width: 96px;
+  }
+
+  .pull-button {
+    width: 100px;
+    font-size: 12px;
   }
 
   .small-button {
