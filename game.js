@@ -717,8 +717,8 @@ function randomBossSide() {
 }
 
 function worldXForBossSide(side) {
-  if (side === "left") return 180 + Math.random() * 440;
-  return worldWidth - 620 + Math.random() * 440;
+  if (side === "left") return worldMinX + 20 + Math.random() * 70;
+  return worldMaxX - 90 + Math.random() * 70;
 }
 
 function makeFishInstance(item, index, depth, overrides = {}) {
@@ -3257,20 +3257,43 @@ function drawBossOmen() {
     }
   }
 
-  const glowAlpha = state.bossOmenTimer > 0 ? 0.34 : 0.2 + Math.sin(state.time * 4) * 0.06;
+  const glowAlpha = state.bossOmenTimer > 0 ? 0.52 : 0.34 + Math.sin(state.time * 4) * 0.1;
+  const glowX = omen.side === "left" ? W * 0.15 : W * 0.85;
   const grad = ctx.createRadialGradient(
-    omen.side === "left" ? W * 0.15 : W * 0.85,
+    glowX,
     H,
     10,
-    omen.side === "left" ? W * 0.15 : W * 0.85,
+    glowX,
     H,
-    300
+    430
   );
   grad.addColorStop(0, rgbaFromHex(color, glowAlpha));
+  grad.addColorStop(0.42, rgbaFromHex(color, glowAlpha * 0.46));
   grad.addColorStop(1, rgbaFromHex(color, 0));
   ctx.globalAlpha = 1;
   ctx.fillStyle = grad;
-  ctx.fillRect(0, H - 310, W, 310);
+  ctx.fillRect(0, H - 430, W, 430);
+
+  ctx.save();
+  ctx.globalAlpha = 0.52 + Math.sin(state.time * 5) * 0.14;
+  ctx.strokeStyle = rgbaFromHex(color, 0.88);
+  ctx.fillStyle = rgbaFromHex(color, 0.52);
+  ctx.lineWidth = 7;
+  ctx.lineCap = "round";
+  const arrowY = H - 205;
+  const arrowX = omen.side === "left" ? W * 0.26 : W * 0.74;
+  const dir = omen.side === "left" ? -1 : 1;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - dir * 20, arrowY - 34);
+  ctx.quadraticCurveTo(arrowX - dir * 70, arrowY + 2, arrowX, arrowY + 58);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(arrowX, arrowY + 58);
+  ctx.lineTo(arrowX - dir * 40, arrowY + 34);
+  ctx.lineTo(arrowX - dir * 18, arrowY + 86);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
   ctx.restore();
 }
 
