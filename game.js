@@ -26,7 +26,6 @@ const betUpButton = document.getElementById("betUpButton");
 const devToggleButton = document.getElementById("devToggleButton");
 const devControls = document.getElementById("devControls");
 const sharkToggle = document.getElementById("sharkToggle");
-const schoolRuleBoard = document.getElementById("schoolRuleBoard");
 const crimsonChanceSlider = document.getElementById("crimsonChanceSlider");
 const crimsonChanceText = document.getElementById("crimsonChanceText");
 const octopusChanceSlider = document.getElementById("octopusChanceSlider");
@@ -67,15 +66,6 @@ const bossMinDepth = 70;
 const nopeColor = "#9aa3ad";
 const fishPayoutBoost = 0.45;
 const fishSizeScale = 2 / 3;
-const schoolPayoutTable = {
-  1: 1,
-  2: 2,
-  3: 5,
-  4: 10,
-  5: 15,
-  6: 30,
-  7: 50,
-};
 let audioCtx = null;
 let music = null;
 
@@ -146,8 +136,8 @@ const specialCatalog = [
 
 const seaPatterns = [
   {
-    name: "School Bloom",
-    label: "SCHOOL BLOOM",
+    name: "Tide Bloom",
+    label: "TIDE BLOOM",
     boosts: { "Blue Sprat": 1.8, "Puffer Pearl": 1.45 },
     zoneBias: { 1: 1.25, 2: 0.95, 3: 0.8 },
   },
@@ -919,10 +909,6 @@ function updateHud() {
     ? `${state.bestCandidate.name} ${fishValue(state.bestCandidate)}`
     : "-";
 
-  if (schoolRuleBoard) {
-    const shouldShowRules = state.status === "ready";
-    schoolRuleBoard.classList.toggle("hidden", !shouldShowRules);
-  }
 }
 
 function refillBalanceForDev() {
@@ -1604,7 +1590,7 @@ function caughtFishPayout(options = {}) {
 function caughtFishPayoutInfo(options = {}) {
   const groups = new Map();
   let bossTotal = 0;
-  let rawFishTotal = 0;
+  let fishTotal = 0;
 
   for (const fish of state.caughtFish) {
     if (options.excludeMystery && fish.bossType === "mystery") continue;
@@ -1614,61 +1600,41 @@ function caughtFishPayoutInfo(options = {}) {
       continue;
     }
 
-    rawFishTotal += singleValue;
+    fishTotal += singleValue;
     const key = fish.name;
-    const group = groups.get(key) || { name: fish.name, count: 0, singleTotal: 0 };
+    const group = groups.get(key) || { name: fish.name, count: 0, payout: 0 };
     group.count += 1;
-    group.singleTotal += singleValue;
+    group.payout += singleValue;
     groups.set(key, group);
   }
 
-  const schools = [];
-  let schoolTotal = 0;
-  for (const group of groups.values()) {
-    const cappedCount = Math.min(7, group.count);
-    const multiplier = schoolPayoutTable[cappedCount] || cappedCount;
-    const singleValue = group.singleTotal / group.count;
-    const payout = singleValue * multiplier;
-    schoolTotal += payout;
-    schools.push({ ...group, singleValue, multiplier, payout });
-  }
-
-  schools.sort((a, b) => b.payout - a.payout);
+  const catches = [...groups.values()].sort((a, b) => b.payout - a.payout);
   return {
-    total: bossTotal + schoolTotal,
-    rawFishTotal,
-    schoolBonus: Math.max(0, schoolTotal - rawFishTotal),
+    total: bossTotal + fishTotal,
+    rawFishTotal: fishTotal,
+    fishTotal,
     bossTotal,
-    schoolTotal,
-    schools,
+    catches,
   };
 }
 
 function payoutSummaryText(info) {
-  const hits = info.schools.filter((school) => school.count >= 3).slice(0, 3);
-  const hitText = hits.length
-    ? hits
-    .map((school) => `${school.count}x ${school.name} = ${money(school.payout)}`)
-    .join(" / ")
-    : "No school bonus";
   const bossText = info.bossTotal > 0 ? ` Boss ${money(info.bossTotal)}.` : "";
-  return `Base ${money(info.rawFishTotal)} + School Bonus ${money(info.schoolBonus)}.${bossText} ${hitText}. Total ${money(info.total)}.`;
+  return `Fish ${money(info.fishTotal)}.${bossText} Total ${money(info.total)}.`;
 }
 
 function buildPayoutBreakdown(info) {
-  const rows = info.schools.slice(0, 6).map((school) => {
-    const color = school.count >= 3 ? "#ffd36a" : "#9aa3ad";
-    const kindText = school.count === 1 ? "SINGLE" : `${school.count} OF A KIND`;
-    const icon = fishIconHtml(school.name);
+  const rows = info.catches.slice(0, 8).map((caught) => {
+    const icon = fishIconHtml(caught.name);
     return `
       <div class="payout-row">
         ${icon}
-        <div class="payout-kind">
-          <strong>${kindText}</strong>
-          <span>${school.name}</span>
+        <div class="payout-info">
+          <strong>${caught.name}</strong>
+          <span>${caught.count} caught</span>
         </div>
-        <div class="payout-mult" style="--row-color:${color}">${school.multiplier}x</div>
-        <div class="payout-money">${money(school.payout)}</div>
+        <div class="payout-mult" style="--row-color:#9ce7ff">-</div>
+        <div class="payout-money">${money(caught.payout)}</div>
       </div>
     `;
   });
@@ -1677,7 +1643,7 @@ function buildPayoutBreakdown(info) {
     rows.push(`
       <div class="payout-row payout-row-boss">
         <span class="fish-icon fish-icon-boss"></span>
-        <div class="payout-kind">
+        <div class="payout-info">
           <strong>BOSS</strong>
           <span>Boss catch</span>
         </div>
@@ -1689,8 +1655,8 @@ function buildPayoutBreakdown(info) {
 
   rows.push(`
     <div class="payout-total-row">
-      <span>Base ${money(info.rawFishTotal)}</span>
-      <span>School Bonus ${money(info.schoolBonus)}</span>
+      <span>Fish ${money(info.fishTotal)}</span>
+      <span>Boss ${money(info.bossTotal)}</span>
       <strong>Total ${money(info.total)}</strong>
     </div>
   `);
