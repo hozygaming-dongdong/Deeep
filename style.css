@@ -220,7 +220,7 @@ strong {
   bottom: 16px;
   left: 12px;
   display: grid;
-  grid-template-columns: 0.95fr 2.05fr 1.08fr;
+  grid-template-columns: clamp(112px, 21%, 138px) minmax(150px, 1fr) clamp(112px, 21%, 138px);
   gap: 8px;
   align-items: end;
 }
@@ -244,6 +244,16 @@ strong {
   padding: 7px;
   background: linear-gradient(#45616e, #1c3036);
   text-align: center;
+  min-width: 0;
+}
+
+.bet-panel > div {
+  min-width: 0;
+}
+
+#betText {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .small-button {
@@ -638,7 +648,7 @@ strong {
   }
 
   .controls {
-    grid-template-columns: 0.82fr 2fr 1fr;
+    grid-template-columns: 92px minmax(126px, 1fr) 92px;
     gap: 5px;
   }
 
