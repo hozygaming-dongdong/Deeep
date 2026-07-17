@@ -64,7 +64,7 @@ const pullShakeDuration = 0.32;
 const hookCatchRadius = 38;
 const bossMinDepth = 70;
 const nopeColor = "#9aa3ad";
-const fishPayoutBoost = 0.225;
+const fishPayoutBoost = 0.18;
 const fishSizeScale = 2 / 3;
 let audioCtx = null;
 let music = null;
@@ -512,10 +512,10 @@ function switchDiveSide(side) {
 }
 
 function sharkChanceForDepth(depth) {
-  if (depth <= 20) return 0.004;
-  if (depth <= 50) return 0.007;
-  if (depth <= 80) return 0.01;
-  return 0.014;
+  if (depth <= 20) return 0.006;
+  if (depth <= 50) return 0.0105;
+  if (depth <= 80) return 0.015;
+  return 0.021;
 }
 
 function normalizeAngle(angle) {
@@ -1289,7 +1289,7 @@ function updateOctopusCollector(dt) {
 
 function makePullRocks(startDepth) {
   const rocks = [];
-  for (let depth = Math.max(8, startDepth - 8); depth > 4; depth -= 10 + Math.random() * 7) {
+  for (let depth = Math.max(8, startDepth - 8); depth > 4; depth -= 6.7 + Math.random() * 4.7) {
     rocks.push({
       depth,
       worldX: Math.max(80, Math.min(worldWidth - 80, worldHookX() + Math.random() * 620 - 310)),
