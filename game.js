@@ -809,6 +809,7 @@ function makeFishInstance(item, index, depth, overrides = {}) {
     depth: overrides.depth ?? Math.min(maxDepth - 0.2, depth + Math.random() * 0.9),
     dir: overrides.dir ?? (index % 2 === 0 ? 1 : -1),
     speed: overrides.speed ?? (0.25 + Math.random() * 0.55),
+    baseDir: overrides.baseDir ?? overrides.dir ?? (index % 2 === 0 ? 1 : -1),
     phase: Math.random() * Math.PI * 2,
     valueMultiplier: 1,
     attempted: false,
@@ -888,6 +889,7 @@ function makeFish() {
       worldX: worldXForTide(tide, cluster),
       depth: depthForTide(tide, depth, cluster),
       dir: tide.swimDir,
+      baseDir: tide.swimDir,
       speed: tide.speed + (Math.random() - 0.5) * 0.12,
     } : {}));
 
@@ -899,6 +901,7 @@ function makeFish() {
           tideId: tide.id,
           worldX: worldXForTide(tide, extraCluster),
           dir: tide.swimDir,
+          baseDir: tide.swimDir,
           speed: tide.speed + (Math.random() - 0.5) * 0.16,
         }));
       }
@@ -1056,11 +1059,12 @@ function triggerPullSurge() {
   let longestShuffle = 0;
   for (const fish of state.fish) {
     if (fish.hooked || fish.escaped || fish.depth > state.pullStartDepth) continue;
-    fish.shuffleTimer = 0.5 + Math.random() * 1.0;
+    const isTideFish = Boolean(fish.tideId);
+    fish.shuffleTimer = isTideFish ? 0.42 + Math.random() * 0.42 : 0.5 + Math.random() * 1.0;
     fish.shuffleDuration = fish.shuffleTimer;
-    fish.shuffleSpeed = 4.5 + Math.random() * 4.5;
-    fish.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
-    fish.dir = Math.random() < 0.5 ? -1 : 1;
+    fish.shuffleSpeed = isTideFish ? 2.4 + Math.random() * 1.2 : 4.5 + Math.random() * 4.5;
+    fish.shuffleTurnTimer = isTideFish ? fish.shuffleTimer + 1 : 0.08 + Math.random() * 0.22;
+    fish.dir = isTideFish ? fish.baseDir || fish.dir : Math.random() < 0.5 ? -1 : 1;
     fish.phase = Math.random() * Math.PI * 2;
     longestShuffle = Math.max(longestShuffle, fish.shuffleTimer);
   }
@@ -1087,6 +1091,7 @@ function finishPullShuffle() {
     fish.shuffleDuration = null;
     fish.shuffleSpeed = null;
     fish.shuffleTurnTimer = null;
+    if (fish.tideId) fish.dir = fish.baseDir || fish.dir;
   }
   state.rocks = makePullRocks(state.depth);
 }
@@ -1828,12 +1833,14 @@ function updateFish(dt) {
     if (fish.hooked) continue;
     const isSurging = surgeActive && fish.depth <= state.pullStartDepth;
     if (isSurging && fish.shuffleTimer > 0) {
+      const isTideFish = Boolean(fish.tideId);
       fish.shuffleTimer = Math.max(0, fish.shuffleTimer - dt);
       fish.shuffleTurnTimer = Math.max(0, (fish.shuffleTurnTimer || 0) - dt);
-      if (fish.shuffleTurnTimer <= 0 && Math.random() < 0.72) {
+      if (!isTideFish && fish.shuffleTurnTimer <= 0 && Math.random() < 0.72) {
         fish.dir *= -1;
         fish.shuffleTurnTimer = 0.08 + Math.random() * 0.22;
       }
+      if (isTideFish) fish.dir = fish.baseDir || fish.dir;
       fish.phase += dt * 22;
       fish.worldX += fish.speed * fish.dir * dt * 350 * (fish.shuffleSpeed || 5);
       if (fish.shuffleTimer <= 0) {
