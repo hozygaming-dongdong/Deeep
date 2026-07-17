@@ -736,10 +736,20 @@ function omenForBoss(boss, side) {
     color,
     text: `${boss.name.toUpperCase()} BELOW`,
     activeFrom: 38 + Math.random() * 5,
+    targetWorldX: null,
     triggered: false,
     timer: 0,
     trailTimer: 0,
   };
+}
+
+function clueScreenX(targetWorldX, margin = 58) {
+  return Math.max(margin, Math.min(W - margin, screenX(targetWorldX)));
+}
+
+function isWorldTargetOnScreen(targetWorldX, margin = 58) {
+  const x = screenX(targetWorldX);
+  return x >= margin && x <= W - margin;
 }
 
 function chanceSliderValue(slider, fallback) {
@@ -807,7 +817,10 @@ function resetRound() {
   }));
   state.roundBoss = state.roundBosses[0]?.boss || null;
   state.roundBossSide = state.roundBosses[0]?.side || null;
-  state.bossOmens = state.roundBosses.map((item) => omenForBoss(item.boss, item.side));
+  state.bossOmens = state.roundBosses.map((item) => {
+    item.omen = omenForBoss(item.boss, item.side);
+    return item.omen;
+  });
   state.bossOmen = state.bossOmens[0] || null;
   state.bossOmenTriggered = false;
   state.bossOmenTimer = 0;
@@ -865,8 +878,10 @@ function makeFish() {
   for (const bossEntry of state.roundBosses) {
     const boss = bossEntry.boss;
     const bossDepth = bossMinDepth + Math.random() * (maxDepth - bossMinDepth - 2);
+    const bossWorldX = worldXForBossSide(bossEntry.side);
+    if (bossEntry.omen) bossEntry.omen.targetWorldX = bossWorldX;
     fish.push(makeFishInstance(boss, fish.length, bossDepth, {
-      worldX: worldXForBossSide(bossEntry.side),
+      worldX: bossWorldX,
       depth: bossDepth,
       dir: Math.random() < 0.5 ? 1 : -1,
       fixedMult: boss.mult,
@@ -3256,14 +3271,20 @@ function drawSingleBossOmen(omen) {
   const sideSign = omen.side === "left" ? -1 : 1;
   const color = omen.color;
   const timer = omen.timer || 0;
+  const targetWorldX = omen.targetWorldX ?? (omen.side === "left" ? worldMinX : worldMaxX);
+  const targetScreenX = screenX(targetWorldX);
+  const clueX = clueScreenX(targetWorldX, 64);
+  const onScreen = isWorldTargetOnScreen(targetWorldX, 64);
 
   ctx.save();
   if (timer > 0) {
     const progress = 1 - timer / 1.15;
     const ease = 1 - Math.pow(1 - progress, 3);
-    const x = W / 2 + sideSign * (80 + ease * 260);
+    const startX = W / 2 + sideSign * 60;
+    const x = startX + (clueX - startX) * ease;
     const y = H * 0.62 + ease * 210;
     const alpha = Math.max(0, 1 - progress * 0.35);
+    ctx.save();
     ctx.globalAlpha = alpha;
 
     ctx.strokeStyle = rgbaFromHex(color, 0.42);
@@ -3307,24 +3328,34 @@ function drawSingleBossOmen(omen) {
       ctx.fill();
       ctx.stroke();
     }
+    ctx.restore();
   }
 
   const glowAlpha = timer > 0 ? 0.52 : 0.34 + Math.sin(state.time * 4) * 0.1;
-  const glowX = omen.side === "left" ? W * 0.15 : W * 0.85;
+  const glowRadius = onScreen ? 310 : 430;
   const grad = ctx.createRadialGradient(
-    glowX,
+    clueX,
     H,
     10,
-    glowX,
+    clueX,
     H,
-    430
+    glowRadius
   );
   grad.addColorStop(0, rgbaFromHex(color, glowAlpha));
   grad.addColorStop(0.42, rgbaFromHex(color, glowAlpha * 0.46));
   grad.addColorStop(1, rgbaFromHex(color, 0));
   ctx.globalAlpha = 1;
   ctx.fillStyle = grad;
-  ctx.fillRect(0, H - 430, W, 430);
+  ctx.fillRect(Math.max(0, clueX - glowRadius), H - glowRadius, glowRadius * 2, glowRadius);
+
+  if (onScreen) {
+    const columnGrad = ctx.createLinearGradient(clueX, H - 430, clueX, H);
+    columnGrad.addColorStop(0, rgbaFromHex(color, 0));
+    columnGrad.addColorStop(0.42, rgbaFromHex(color, 0.16 + Math.sin(state.time * 5) * 0.04));
+    columnGrad.addColorStop(1, rgbaFromHex(color, 0.42));
+    ctx.fillStyle = columnGrad;
+    ctx.fillRect(clueX - 72, H - 430, 144, 430);
+  }
 
   ctx.save();
   ctx.globalAlpha = 0.52 + Math.sin(state.time * 5) * 0.14;
@@ -3333,10 +3364,10 @@ function drawSingleBossOmen(omen) {
   ctx.lineWidth = 7;
   ctx.lineCap = "round";
   const arrowY = H - 205;
-  const arrowX = omen.side === "left" ? W * 0.26 : W * 0.74;
-  const dir = omen.side === "left" ? -1 : 1;
+  const arrowX = clueX;
+  const dir = targetScreenX < W / 2 ? -1 : 1;
   ctx.beginPath();
-  ctx.moveTo(W / 2 - dir * 20, arrowY - 34);
+  ctx.moveTo(onScreen ? arrowX : W / 2 - dir * 20, arrowY - 34);
   ctx.quadraticCurveTo(arrowX - dir * 70, arrowY + 2, arrowX, arrowY + 58);
   ctx.stroke();
   ctx.beginPath();
@@ -3363,8 +3394,8 @@ function drawFishTides() {
     const color = tide.item.accent || tide.item.color || "#ffd36a";
     const pulse = 0.5 + Math.sin(state.time * 4.2 + tide.phase) * 0.5;
     const clueX = screenX(tide.centerX);
-    const visibleX = Math.max(-140, Math.min(W + 140, clueX));
-    const sideX = tide.side === "left" ? W * 0.08 : W * 0.92;
+    const visibleX = clueScreenX(tide.centerX, 58);
+    const onScreen = isWorldTargetOnScreen(tide.centerX, 58);
     const edgePulse = 0.55 + pulse * 0.25;
     const grad = ctx.createRadialGradient(visibleX, y, 20, visibleX, y, 360);
 
@@ -3374,21 +3405,21 @@ function drawFishTides() {
     ctx.fillStyle = grad;
     ctx.fillRect(0, y - height / 2, W, height);
 
-    const edgeGrad = ctx.createRadialGradient(sideX, y, 8, sideX, y, 190);
+    const edgeGrad = ctx.createRadialGradient(visibleX, y, 8, visibleX, y, onScreen ? 240 : 190);
     edgeGrad.addColorStop(0, rgbaFromHex(color, 0.32 * edgePulse));
     edgeGrad.addColorStop(0.45, rgbaFromHex(color, 0.16 * edgePulse));
     edgeGrad.addColorStop(1, rgbaFromHex(color, 0));
     ctx.fillStyle = edgeGrad;
-    ctx.fillRect(tide.side === "left" ? 0 : W - 260, y - height, 260, height * 2);
+    ctx.fillRect(Math.max(0, visibleX - 260), y - height, 520, height * 2);
 
     ctx.strokeStyle = rgbaFromHex(color, 0.4 + pulse * 0.28);
     ctx.lineWidth = 4;
     for (let i = 0; i < 5; i += 1) {
       const lineY = y - height / 2 + 16 + (i * (height - 32)) / 4;
       const wave = Math.sin(state.time * 4.5 + i + tide.phase) * 24;
-      const startX = tide.side === "left" ? 24 : W - 24;
+      const startX = clueX < W / 2 ? 24 : W - 24;
       const endX = Math.max(80, Math.min(W - 80, visibleX));
-      const pull = tide.side === "left" ? 1 : -1;
+      const pull = startX < endX ? 1 : -1;
       ctx.beginPath();
       ctx.moveTo(startX, lineY);
       ctx.bezierCurveTo(
