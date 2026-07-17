@@ -613,13 +613,25 @@ function makeFishTides() {
     const centerX = side === "left"
       ? worldMinX + 95 + Math.random() * 260
       : worldMaxX - 355 + Math.random() * 260;
+    const swimDir = Math.random() < 0.5 ? -1 : 1;
+    const clusterCount = 3;
     tides.push({
+      id: `tide-${tides.length}-${Math.round(start * 10)}`,
       start,
       end,
       item,
       side,
+      swimDir,
       centerX,
-      spread: 120 + Math.random() * 90,
+      speed: 1.22 + Math.random() * 0.28,
+      spread: 62 + Math.random() * 42,
+      clusters: Array.from({ length: clusterCount }, (_, index) => {
+        const lane = index - (clusterCount - 1) / 2;
+        return {
+          worldX: Math.max(82, Math.min(worldWidth - 82, centerX + lane * (62 + Math.random() * 34) + (Math.random() - 0.5) * 28)),
+          depth: Math.max(start + 0.35, Math.min(end - 0.35, start + (index + 0.5) * ((end - start) / clusterCount) + (Math.random() - 0.5) * 0.9)),
+        };
+      }),
       phase: Math.random() * TAU,
     });
   }
@@ -767,10 +779,22 @@ function worldXForBossSide(side) {
   return worldMaxX - 90 + Math.random() * 70;
 }
 
-function worldXForTide(tide) {
+function clusterForTide(tide) {
+  if (!tide?.clusters?.length) return null;
+  return tide.clusters[Math.floor(Math.random() * tide.clusters.length)];
+}
+
+function worldXForTide(tide, cluster = clusterForTide(tide)) {
   if (!tide) return 80 + Math.random() * (worldWidth - 160);
+  const anchor = cluster?.worldX ?? tide.centerX;
   const offset = (Math.random() - 0.5) * 2 * tide.spread;
-  return Math.max(68, Math.min(worldWidth - 68, tide.centerX + offset));
+  return Math.max(68, Math.min(worldWidth - 68, anchor + offset));
+}
+
+function depthForTide(tide, fallbackDepth, cluster = clusterForTide(tide)) {
+  if (!tide) return fallbackDepth;
+  const anchor = cluster?.depth ?? fallbackDepth;
+  return Math.max(tide.start, Math.min(tide.end, anchor + (Math.random() - 0.5) * 1.15));
 }
 
 function makeFishInstance(item, index, depth, overrides = {}) {
@@ -858,19 +882,24 @@ function makeFish() {
     const tide = fishTideForDepth(depth);
     const item = tide ? tide.item : specialForDepth(depth) || catalogForDepth(depth);
     const index = fish.length;
+    const cluster = tide ? clusterForTide(tide) : null;
     fish.push(makeFishInstance(item, index, depth, tide ? {
-      worldX: worldXForTide(tide),
-      dir: tide.side === "left" ? 1 : -1,
-      speed: 0.82 + Math.random() * 0.68,
+      tideId: tide.id,
+      worldX: worldXForTide(tide, cluster),
+      depth: depthForTide(tide, depth, cluster),
+      dir: tide.swimDir,
+      speed: tide.speed + (Math.random() - 0.5) * 0.12,
     } : {}));
 
     if (tide) {
-      const extraCount = 2 + Math.floor(Math.random() * 3);
+      const extraCount = 8 + Math.floor(Math.random() * 6);
       for (let i = 0; i < extraCount; i += 1) {
-        fish.push(makeFishInstance(item, fish.length, Math.min(tide.end, depth + Math.random() * 0.5), {
-          worldX: worldXForTide(tide),
-          dir: Math.random() < 0.5 ? -1 : 1,
-          speed: 1.05 + Math.random() * 0.8,
+        const extraCluster = clusterForTide(tide);
+        fish.push(makeFishInstance(item, fish.length, depthForTide(tide, depth, extraCluster), {
+          tideId: tide.id,
+          worldX: worldXForTide(tide, extraCluster),
+          dir: tide.swimDir,
+          speed: tide.speed + (Math.random() - 0.5) * 0.16,
         }));
       }
     }
@@ -1817,8 +1846,13 @@ function updateFish(dt) {
       fish.worldX += fish.speed * fish.dir * dt * 350;
     }
 
-    if (fish.worldX < 68) fish.dir = 1;
-    if (fish.worldX > worldWidth - 68) fish.dir = -1;
+    if (fish.tideId && !isSurging) {
+      if (fish.worldX < 68) fish.worldX = worldWidth - 68;
+      if (fish.worldX > worldWidth - 68) fish.worldX = 68;
+    } else {
+      if (fish.worldX < 68) fish.dir = 1;
+      if (fish.worldX > worldWidth - 68) fish.dir = -1;
+    }
     fish.worldX = Math.max(68, Math.min(worldWidth - 68, fish.worldX));
     fish.x = screenX(fish.worldX);
   }
@@ -3474,21 +3508,34 @@ function drawFishTides() {
     for (let i = 0; i < 5; i += 1) {
       const lineY = y - height / 2 + 16 + (i * (height - 32)) / 4;
       const wave = Math.sin(state.time * 4.5 + i + tide.phase) * 24;
-      const startX = clueX < W / 2 ? 24 : W - 24;
-      const endX = Math.max(80, Math.min(W - 80, visibleX));
-      const pull = startX < endX ? 1 : -1;
+      const flow = tide.swimDir || 1;
+      const endX = Math.max(80, Math.min(W - 80, visibleX + flow * (70 + pulse * 35)));
+      const startX = Math.max(24, Math.min(W - 24, endX - flow * 260));
       ctx.beginPath();
       ctx.moveTo(startX, lineY);
       ctx.bezierCurveTo(
-        startX + pull * (110 + wave),
+        startX + flow * (90 + wave),
         lineY - 22,
-        endX - pull * (140 - wave),
+        endX - flow * (115 - wave),
         lineY + 22,
         endX,
         lineY
       );
       ctx.stroke();
     }
+
+    ctx.save();
+    ctx.globalAlpha = 0.22 + pulse * 0.14;
+    ctx.fillStyle = rgbaFromHex(color, 0.72);
+    const flow = tide.swimDir || 1;
+    for (let i = 0; i < 8; i += 1) {
+      const dotX = visibleX - flow * (150 - i * 36 + ((state.time * 90 + tide.phase * 18) % 36));
+      const dotY = y - height * 0.32 + ((i * 37 + tide.phase * 20) % Math.max(24, height * 0.64));
+      ctx.beginPath();
+      ctx.ellipse(dotX, dotY, 14, 5, flow > 0 ? 0.08 : -0.08, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
 
   }
   ctx.restore();
